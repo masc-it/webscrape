@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr};
 
 use headless_chrome::{Browser, LaunchOptions, Tab, Element, browser::{transport::{Transport, SessionId}, tab::RequestPausedDecision}, protocol::cdp::{Fetch::{events::RequestPausedEvent, HeaderEntry, FulfillRequest, RequestPattern, RequestStage}, Network::ResourceType}};
 
@@ -19,6 +19,8 @@ pub struct Scraper {
 impl Default for Scraper {
     fn default() -> Self {
 
+        let proxy_url = format!("--proxy-server=http://{}:{}", "37.35.43.159", "9017");
+        let proxy_arg = std::ffi::OsString::from(proxy_url);
         let browser = Browser::new(LaunchOptions{
 
             //args: vec![&proxy_arg],
@@ -28,6 +30,9 @@ impl Default for Scraper {
         
         let tab = browser.wait_for_initial_tab().unwrap().to_owned();
 
+        /* tab.enable_fetch(None, Some(true)).unwrap();
+        tab.authenticate(Some(String::from("proxygobrr69")), Some(String::from("dksfjlfnajd32429"))).unwrap();
+     */
         let patterns = vec![
             RequestPattern {
                 url_pattern: None,
@@ -47,9 +52,39 @@ impl Default for Scraper {
                 
                 //println!("{:?}", intercepted.params.resource_Type);
                 // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
+                let v = intercepted.params.request.headers.0.unwrap();
+
+                let headersmap = v.as_object().unwrap().clone();
+
                 if intercepted.params.resource_Type == ResourceType::Document {
-                let proxy = format!("http://{}:{}", "45.192.146.173", "6184");
+                let proxy = format!("http://{}:{}", "37.35.43.159", "9017");
                 
+                
+                let mut req_headers : Vec<HeaderEntry> = vec![];
+
+                let mut headers = reqwest::header::HeaderMap::new();
+
+                for (k,val) in headersmap{
+
+                    //println!("{} - {}", &k, &val.as_str().unwrap());
+                    /* req_headers.push(HeaderEntry {
+                        name: k.to_owned(),
+                        value: val.as_str().unwrap().to_owned()
+                    }); */
+                    let myk = k.to_owned();
+                    let myv = val.to_owned();
+                    let myv = myv.to_string();
+
+                    let key = reqwest::header::HeaderName::from_str(&myk).unwrap();
+                    let vall = reqwest::header::HeaderValue::from_str(&myv);
+
+                    headers.insert(key, vall.unwrap());
+                }
+
+                req_headers.push(HeaderEntry {
+                    name: "Content-Type".to_string(),
+                    value: "text/html; charset=utf-8".to_string(),
+                });
                 println!("running reqwest.. {}", intercepted.params.request.url);
                 let res = reqwest::blocking::Client::builder()
                     .proxy(
@@ -57,19 +92,16 @@ impl Default for Scraper {
                             .unwrap()
                             .basic_auth("proxygobrr69", "dksfjlfnajd32429"),
                     )
+                    .default_headers(headers.to_owned())
                     .build()
                     .unwrap()
                     .get(intercepted.params.request.url).send().unwrap().text().unwrap();
                     
-                    let headers = vec![HeaderEntry {
-                        name: "Content-Type".to_string(),
-                        value: "text/html; charset=utf-8".to_string(),
-                    }];
     
                     let fulfill_request = FulfillRequest {
                         request_id: intercepted.params.request_id,
                         response_code: 200,
-                        response_headers: Some(headers),
+                        response_headers: Some(req_headers),
                         binary_response_headers: None,
                         body: Some(base64::encode(res)),
                         response_phrase: None,
