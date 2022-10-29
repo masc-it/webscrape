@@ -1,28 +1,45 @@
 use std::{sync::Arc, str::FromStr};
 
 use headless_chrome::{Browser, LaunchOptions, Tab, Element, browser::{transport::{Transport, SessionId}, tab::RequestPausedDecision}, protocol::cdp::{Fetch::{events::RequestPausedEvent, HeaderEntry, FulfillRequest, RequestPattern, RequestStage, FailRequest}, Network::ResourceType}};
+use rand::{rngs::{StdRng}, Rng, SeedableRng};
 
-use super::{proxy::Proxy, pipeline::Target};
+use super::{proxy::SimpleProxy};
 
-pub struct Scraper {
 
-    pub init_on_create: bool,
-    pub persistent: bool,
-    pub proxy: Vec<Proxy>,
 
-    pub default_timeout: u64,
+pub trait Builder {
 
-    browser: Browser,
-    tab: Arc<Tab>,
+    fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder;
+    fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder;
 
-    current_url: Option<String>
+    fn build(&self) -> Scraper;
+    
 }
 
-impl Default for Scraper {
-    fn default() -> Self {
+#[derive(Default)]
+pub struct ScraperBuilder {
 
-        //let proxy_url = format!("--proxy-server=http://{}:{}", "37.35.43.159", "9017");
-        //let proxy_arg = std::ffi::OsString::from(proxy_url);
+    pub proxies: Vec<SimpleProxy>,
+    pub default_timeout: u64
+
+}
+
+impl Builder for ScraperBuilder {
+
+    fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder {
+
+        self.default_timeout = default_timeout;
+        self
+
+    }
+
+    fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder {
+        self.proxies = proxies;
+        self
+    }
+
+    fn build(&self) -> Scraper {
+        
         let browser = Browser::new(LaunchOptions{
 
             //args: vec![&proxy_arg],
@@ -35,32 +52,31 @@ impl Default for Scraper {
         tab.set_default_timeout(std::time::Duration::from_secs(5));
         tab.enable_fetch(None, None).unwrap();
 
+        let proxies = self.proxies.clone();
         tab.enable_request_interception(Arc::new(
-            move |transport: Arc<Transport>, session_id: SessionId, intercepted: RequestPausedEvent| {
+            move |_: Arc<Transport>, _: SessionId, intercepted: RequestPausedEvent| {
                 
-                //println!("{:?}", intercepted.params.resource_Type);
+                let mut rng: StdRng = SeedableRng::from_entropy();
+
                 // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
                 let v = intercepted.params.request.headers.0.unwrap();
 
                 let headersmap = v.as_object().unwrap().clone();
 
-                println!("{:?}", intercepted.params.resource_Type);
+                //println!("{:?}", intercepted.params.resource_Type);
 
                 if intercepted.params.resource_Type == ResourceType::Document {
-                let proxy = format!("http://{}:{}", "5.154.254.0", "5011");
+                let rnd_i = rng.gen_range(0..proxies.len());
                 
+                let proxy = proxies.get(rnd_i).unwrap().to_owned();
                 
+                println!("{}", proxy.get_address());
                 let mut req_headers : Vec<HeaderEntry> = vec![];
 
                 let mut headers = reqwest::header::HeaderMap::new();
 
                 for (k,val) in headersmap{
 
-                    //println!("{} - {}", &k, &val.as_str().unwrap());
-                    /* req_headers.push(HeaderEntry {
-                        name: k.to_owned(),
-                        value: val.as_str().unwrap().to_owned()
-                    }); */
                     let myk = k.to_owned();
                     let myv = val.to_owned();
                     let myv = myv.to_string();
@@ -75,12 +91,12 @@ impl Default for Scraper {
                     name: "Content-Type".to_string(),
                     value: "text/html; charset=utf-8".to_string(),
                 });
-                println!("running reqwest.. {}", intercepted.params.request.url);
+                //println!("running reqwest.. {}", intercepted.params.request.url);
                 let res = reqwest::blocking::Client::builder()
                     .proxy(
-                        reqwest::Proxy::all(&proxy)
+                        reqwest::Proxy::all(proxy.get_address())
                             .unwrap()
-                            .basic_auth("proxygobrr69", "dksfjlfnajd32429"),
+                            .basic_auth(&proxy.user, &proxy.password),
                     )
                     .default_headers(headers.to_owned())
                     .build()
@@ -106,13 +122,27 @@ impl Default for Scraper {
                 }
             },
         )).unwrap();
-        Self { init_on_create: false, persistent: false, proxy: vec![], browser: browser, default_timeout: 5, tab: tab, current_url: None }
+
+        Scraper { proxy: self.proxies.clone(), default_timeout: self.default_timeout, browser, tab, current_url: None }
     }
+}
+
+pub struct Scraper {
+
+    pub proxy: Vec<SimpleProxy>,
+
+    pub default_timeout: u64,
+
+    browser: Browser,
+    tab: Arc<Tab>,
+
+    current_url: Option<String>,
 }
 
 impl Scraper {
 
     pub fn navigate_to(&mut self, url: &String) -> bool {
+
 
         self.tab.navigate_to(url).unwrap();
 
