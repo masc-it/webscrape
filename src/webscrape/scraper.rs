@@ -1,6 +1,6 @@
 use std::{sync::Arc, str::FromStr};
 
-use headless_chrome::{Browser, LaunchOptions, Tab, Element, browser::{transport::{Transport, SessionId}, tab::RequestPausedDecision}, protocol::cdp::{Fetch::{events::RequestPausedEvent, HeaderEntry, FulfillRequest, RequestPattern, RequestStage}, Network::ResourceType}};
+use headless_chrome::{Browser, LaunchOptions, Tab, Element, browser::{transport::{Transport, SessionId}, tab::RequestPausedDecision}, protocol::cdp::{Fetch::{events::RequestPausedEvent, HeaderEntry, FulfillRequest, RequestPattern, RequestStage, FailRequest}, Network::ResourceType}};
 
 use super::{proxy::Proxy, pipeline::Target};
 
@@ -9,6 +9,8 @@ pub struct Scraper {
     pub init_on_create: bool,
     pub persistent: bool,
     pub proxy: Vec<Proxy>,
+
+    pub default_timeout: u64,
 
     browser: Browser,
     tab: Arc<Tab>,
@@ -19,8 +21,8 @@ pub struct Scraper {
 impl Default for Scraper {
     fn default() -> Self {
 
-        let proxy_url = format!("--proxy-server=http://{}:{}", "37.35.43.159", "9017");
-        let proxy_arg = std::ffi::OsString::from(proxy_url);
+        //let proxy_url = format!("--proxy-server=http://{}:{}", "37.35.43.159", "9017");
+        //let proxy_arg = std::ffi::OsString::from(proxy_url);
         let browser = Browser::new(LaunchOptions{
 
             //args: vec![&proxy_arg],
@@ -28,24 +30,10 @@ impl Default for Scraper {
             ..Default::default()
         }).unwrap();
         
-        let tab = browser.wait_for_initial_tab().unwrap().to_owned();
-
-        /* tab.enable_fetch(None, Some(true)).unwrap();
-        tab.authenticate(Some(String::from("proxygobrr69")), Some(String::from("dksfjlfnajd32429"))).unwrap();
-     */
-        let patterns = vec![
-            RequestPattern {
-                url_pattern: None,
-                resource_Type: None,
-                request_stage: Some(RequestStage::Response),
-            },
-            RequestPattern {
-                url_pattern: None,
-                resource_Type: None,
-                request_stage: Some(RequestStage::Request),
-            },
-        ];
-        tab.enable_fetch(Some(&patterns), None).unwrap();
+        let tab = browser.wait_for_initial_tab().unwrap();
+        
+        tab.set_default_timeout(std::time::Duration::from_secs(5));
+        tab.enable_fetch(None, None).unwrap();
 
         tab.enable_request_interception(Arc::new(
             move |transport: Arc<Transport>, session_id: SessionId, intercepted: RequestPausedEvent| {
@@ -56,8 +44,10 @@ impl Default for Scraper {
 
                 let headersmap = v.as_object().unwrap().clone();
 
+                println!("{:?}", intercepted.params.resource_Type);
+
                 if intercepted.params.resource_Type == ResourceType::Document {
-                let proxy = format!("http://{}:{}", "37.35.43.159", "9017");
+                let proxy = format!("http://{}:{}", "5.154.254.0", "5011");
                 
                 
                 let mut req_headers : Vec<HeaderEntry> = vec![];
@@ -108,12 +98,15 @@ impl Default for Scraper {
                     };
     
                     RequestPausedDecision::Fulfill(fulfill_request)
-                } else {
+                } else if intercepted.params.resource_Type != ResourceType::Document {
                     RequestPausedDecision::Continue(None)
+                } else {
+                    RequestPausedDecision::Fail(FailRequest { request_id: intercepted.params.request_id, error_reason: headless_chrome::protocol::cdp::Network::ErrorReason::BlockedByClient })
+                    
                 }
             },
         )).unwrap();
-        Self { init_on_create: false, persistent: false, proxy: vec![], browser: browser, tab: tab, current_url: None }
+        Self { init_on_create: false, persistent: false, proxy: vec![], browser: browser, default_timeout: 5, tab: tab, current_url: None }
     }
 }
 
@@ -125,9 +118,16 @@ impl Scraper {
 
         self.tab.wait_until_navigated().unwrap();
 
+        self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5)).unwrap();
         self.current_url = Some(url.to_string());
         
         return true;
+        
+    }
+
+    pub fn sleep(&mut self, seconds: u64) {
+
+        std::thread::sleep(std::time::Duration::from_secs(seconds));
         
     }
 
