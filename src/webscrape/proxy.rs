@@ -19,15 +19,19 @@ pub trait FromCSVBuilder {
     fn build(&self) -> Vec<SimpleProxy>;
 }
 
-#[derive(Default)]
 pub struct CSVProxyListBuilder {
 
     source: String,
-
-    parts_pos: HashMap<ProxyField, usize>,
     fields: [ProxyField; 4],
     separator: String,
 
+}
+
+impl Default for CSVProxyListBuilder {
+
+    fn default() -> Self {
+        Self { source: String::from("./config/proxies.csv"), fields: [ProxyField::Host, ProxyField::Port, ProxyField::Username, ProxyField::Password], separator: String::from(",") }
+    }
 }
 
 impl FromCSVBuilder for CSVProxyListBuilder {
