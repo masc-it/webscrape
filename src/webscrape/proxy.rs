@@ -10,12 +10,11 @@ pub enum ProxyField {
 
 pub trait FromCSVBuilder {
 
-    fn set_source(&mut self, file_or_url: String) -> &mut CSVProxyListBuilder;
+    fn set_source<S: AsRef<str> + Clone>(&mut self, file_or_url: S) -> &mut CSVProxyListBuilder;
 
     fn set_columns(&mut self, columns: [ProxyField; 4]) -> &mut CSVProxyListBuilder;
-    fn set_field_pos(&mut self, field: ProxyField, pos: u32) -> &mut CSVProxyListBuilder;
 
-    fn set_separator(&mut self, separator: String) -> &mut CSVProxyListBuilder;
+    fn set_separator<S: AsRef<str> + Clone>(&mut self, separator: S) -> &mut CSVProxyListBuilder;
 
     fn build(&self) -> Vec<SimpleProxy>;
 }
@@ -32,23 +31,15 @@ pub struct CSVProxyListBuilder {
 }
 
 impl FromCSVBuilder for CSVProxyListBuilder {
-    fn set_source(&mut self, file_or_url: String) -> &mut CSVProxyListBuilder {
-        self.source = file_or_url;
+    fn set_source<S: AsRef<str> + Clone>(&mut self, file_or_url: S) -> &mut CSVProxyListBuilder {
+        self.source = file_or_url.as_ref().to_string();
 
         self
     }
 
-    fn set_separator(&mut self, separator: String) -> &mut CSVProxyListBuilder {
-        self.separator = separator;
+    fn set_separator<S: AsRef<str> + Clone>(&mut self, separator: S) -> &mut CSVProxyListBuilder {
+        self.separator = separator.as_ref().to_string();
         self
-    }
-
-    fn set_field_pos(&mut self, field: ProxyField, pos: u32) -> &mut CSVProxyListBuilder {
-        
-        
-        self.parts_pos.insert(field, pos as usize);
-        self
-
     }
 
     fn set_columns(&mut self, columns: [ProxyField; 4]) -> &mut CSVProxyListBuilder {

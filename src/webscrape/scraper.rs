@@ -18,19 +18,32 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use super::proxy::SimpleProxy;
 
 pub trait Builder {
+
+    fn set_headless(&mut self, headless: bool) -> &mut ScraperBuilder;
     fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder;
     fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder;
 
     fn build(&self) -> Scraper;
 }
 
-#[derive(Default)]
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
     pub default_timeout: u64,
+    pub headless: bool
+}
+
+impl Default for ScraperBuilder {
+    fn default() -> Self {
+        Self { proxies: vec![], default_timeout: 5, headless: true }
+    }
 }
 
 impl Builder for ScraperBuilder {
+
+    fn set_headless(&mut self, headless: bool) -> &mut ScraperBuilder {
+        self.headless = headless;
+        self
+    }
     fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder {
         self.default_timeout = default_timeout;
         self
@@ -44,14 +57,14 @@ impl Builder for ScraperBuilder {
     fn build(&self) -> Scraper {
         let browser = Browser::new(LaunchOptions {
             //args: vec![&proxy_arg],
-            headless: false,
+            headless: self.headless,
             ..Default::default()
         })
         .unwrap();
 
         let tab = browser.wait_for_initial_tab().unwrap();
 
-        tab.set_default_timeout(std::time::Duration::from_secs(5));
+        tab.set_default_timeout(std::time::Duration::from_secs(self.default_timeout));
         tab.enable_fetch(None, None).unwrap();
 
         let proxies = self.proxies.clone();
@@ -66,13 +79,12 @@ impl Builder for ScraperBuilder {
 
                 if intercepted.params.resource_Type == ResourceType::Document {
                     
-                    
                     let mut reqwest_proxy: Option<reqwest::Proxy> = None;
                     if proxies.len() > 0 {
                         let mut rng: StdRng = SeedableRng::from_entropy();
                         let rnd_i = rng.gen_range(0..proxies.len());
                         let proxy = proxies.get(rnd_i).unwrap().to_owned();
-                        println!("{}", proxy.get_address());
+                        //println!("{}", proxy.get_address());
 
                         reqwest_proxy = match proxy.user == "" {
                             true => Some(reqwest::Proxy::all(proxy.get_address()).unwrap()),
@@ -153,7 +165,7 @@ impl Builder for ScraperBuilder {
             browser,
             tab,
             current_url: None,
-            elements: vec![],
+            elements: HashMap::default(),
         }
     }
 }
@@ -176,12 +188,12 @@ pub struct Scraper {
 
     current_url: Option<String>,
 
-    elements: Vec<DOMElement>
+    elements: HashMap<String, DOMElement>
 }
 
 impl Scraper {
-    pub fn navigate_to(&mut self, url: &String) -> &mut Scraper {
-        self.tab.navigate_to(url).unwrap();
+    pub fn navigate_to<S: AsRef<str> + Clone>(&mut self, url: S) -> &mut Scraper {
+        self.tab.navigate_to(url.as_ref()).unwrap();
 
         if let Err(_) = self.tab.wait_until_navigated() {
             println!("Page load timeout..");
@@ -190,7 +202,7 @@ impl Scraper {
         self.tab
             .wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5))
             .unwrap();
-        self.current_url = Some(url.to_string());
+        self.current_url = Some(url.as_ref().to_string());
 
         self
     }
@@ -201,13 +213,19 @@ impl Scraper {
         self
     }
 
-    pub fn collect(&mut self) -> Vec<DOMElement> {
+    // TODO: list of lists or MAP
+    // TODO: flatten()
+    pub fn collect(&mut self) -> HashMap<String, DOMElement> {
         let r = self.elements.clone();
         self.elements.clear();
         r
     }
 
-    pub fn find_elements_by_css(&mut self, target: &String) -> &mut Scraper {
+    pub fn find_elements_by_css<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper 
+    {
+        let target = target.as_ref();
+        let name = name.as_ref();
+
         if target.starts_with("/") {
             println!("Invalid CSS selector.");
             return self;
@@ -228,14 +246,18 @@ impl Scraper {
 
         for el in &elements {
 
-            self.elements.push(self.build_dom_element(el));
+            self.elements.insert(name.to_string(), self.build_dom_element(el));
         }
         
 
         return self;
     }
 
-    pub fn find_elements_by_xpath(&mut self, target: &String) -> &mut Scraper {
+    pub fn find_elements_by_xpath<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper {
+        
+        let target = target.as_ref();
+        let name = name.as_ref();
+
         if !target.starts_with("/") {
             println!("Invalid XPath selector.");
             return self;
@@ -257,7 +279,7 @@ impl Scraper {
         for el in &elements {
 
             let dom_el = self.build_dom_element(el);
-            self.elements.push(dom_el);
+            self.elements.insert(name.to_string(), dom_el);
         }
 
         return self;
