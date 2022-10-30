@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, collections::HashMap};
 
 use headless_chrome::{
     browser::{
@@ -153,8 +153,17 @@ impl Builder for ScraperBuilder {
             browser,
             tab,
             current_url: None,
+            elements: vec![],
         }
     }
+}
+
+
+#[derive(Clone)]
+pub struct DOMElement {
+
+    pub text: String,
+    pub attrs: HashMap<String, String>
 }
 
 pub struct Scraper {
@@ -166,10 +175,12 @@ pub struct Scraper {
     tab: Arc<Tab>,
 
     current_url: Option<String>,
+
+    elements: Vec<DOMElement>
 }
 
 impl Scraper {
-    pub fn navigate_to(&mut self, url: &String) -> bool {
+    pub fn navigate_to(&mut self, url: &String) -> &mut Scraper {
         self.tab.navigate_to(url).unwrap();
 
         if let Err(_) = self.tab.wait_until_navigated() {
@@ -181,23 +192,31 @@ impl Scraper {
             .unwrap();
         self.current_url = Some(url.to_string());
 
-        return true;
+        self
     }
 
-    pub fn sleep(&mut self, seconds: u64) {
+    pub fn sleep(&self, seconds: u64) -> &Scraper {
         std::thread::sleep(std::time::Duration::from_secs(seconds));
+
+        self
     }
 
-    pub fn find_elements_by_css(&self, target: &String) -> Vec<Element> {
+    pub fn collect(&mut self) -> Vec<DOMElement> {
+        let r = self.elements.clone();
+        self.elements.clear();
+        r
+    }
+
+    pub fn find_elements_by_css(&mut self, target: &String) -> &mut Scraper {
         if target.starts_with("/") {
             println!("Invalid CSS selector.");
-            return vec![];
+            return self;
         }
 
         if let None = self.current_url {
             println!("Didn't you call navigate_to(url) ?");
 
-            return vec![];
+            return self;
         }
 
         let query_result = self.tab.wait_for_elements(&target);
@@ -207,19 +226,25 @@ impl Scraper {
             Err(_) => vec![],
         };
 
-        return elements;
+        for el in &elements {
+
+            self.elements.push(self.build_dom_element(el));
+        }
+        
+
+        return self;
     }
 
-    pub fn find_elements_by_xpath(&self, target: &String) -> Vec<Element> {
+    pub fn find_elements_by_xpath(&mut self, target: &String) -> &mut Scraper {
         if !target.starts_with("/") {
             println!("Invalid XPath selector.");
-            return vec![];
+            return self;
         }
 
         if let None = self.current_url {
             println!("Didn't you call navigate_to(url) ?");
 
-            return vec![];
+            return self;
         }
 
         let query_result = self.tab.wait_for_elements_by_xpath(&target);
@@ -229,6 +254,39 @@ impl Scraper {
             Err(_) => vec![],
         };
 
-        return elements;
+        for el in &elements {
+
+            let dom_el = self.build_dom_element(el);
+            self.elements.push(dom_el);
+        }
+
+        return self;
     }
+
+    fn build_dom_element(&self, el: &Element ) -> DOMElement {
+
+        let mut attrs_map: HashMap<String, String> = HashMap::default();
+
+        let attrs = el.get_attributes().unwrap().unwrap();
+        //println!("len {}", attrs.len());
+
+        if attrs.len() > 0 {
+
+            for i in (0..attrs.len() - 1).step_by(2) {
+    
+                let k = attrs[i].to_string();
+                let v = attrs[i+1].to_string();
+                attrs_map.insert(k, v);
+            }
+        }
+        
+
+        let dom_el = DOMElement {
+            text: el.get_inner_text().unwrap(),
+            attrs: attrs_map
+        };
+
+        dom_el
+    }
+
 }
