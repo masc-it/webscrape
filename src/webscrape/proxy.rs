@@ -58,6 +58,7 @@ impl FromCSVBuilder for CSVProxyListBuilder {
             true => {
                 let mut resp = reqwest::blocking::get(&self.source).expect("Couldn't download the proxy list. You should provide a valid Proxy URL.");
                 
+                std::fs::create_dir("config/").unwrap_or(());
                 let mut out = File::create("config/proxies.csv").unwrap();
 
                 io::copy(&mut resp, &mut out).expect("failed to copy content");

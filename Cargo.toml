@@ -2,15 +2,23 @@
 name = "webscrape"
 version = "0.1.0"
 edition = "2021"
+authors = ["Mauro Sciancalepore <maurosciancalepore98@gmail.com>"]
+description = "Web Scraping made easy."
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 tokio = { version = "1", features = ["full"] }
-headless_chrome = { git = "https://github.com/atroche/rust-headless-chrome", tag = "v1.0.0", features = ["fetch"] }
+#headless_chrome = { git = "https://github.com/atroche/rust-headless-chrome", tag = "v1.0.0", features = ["fetch"] }
+headless_chrome_fork = { version = "1", features = ["fetch"] }
 scraper = "0.13.0"
 serde = "1.0"
 serde_yaml = "0.9.14"
 base64 = "0.13.1"
 rand = "0.8.5"
+
+[lib]
+name = "webscrape"
+path = "src/lib.rs"

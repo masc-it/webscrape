@@ -156,8 +156,7 @@ impl Builder for ScraperBuilder {
                     })
                 }
             },
-        ))
-        .expect("You should check the validity of your proxies or the URL provided.");
+        )).expect("You should check the validity of your proxies or the URL provided.");
 
         Scraper {
             proxy: self.proxies.clone(),
