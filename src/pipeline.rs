@@ -1,10 +1,10 @@
 #![allow(unused_must_use)]
 
-use std::{sync::Arc};
-
-use headless_chrome::browser::tab::Tab;
+use std::fmt::Display;
 
 use serde::{Serialize, Deserialize};
+
+use crate::scraper::Scraper;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Target {
@@ -42,57 +42,6 @@ pub struct Action {
     pub data: ActionData
 }
 
-pub trait Actionable {
-
-    fn run(&self, tab: &Arc<Tab>);
-
-    fn get_data(&self) -> String;
-
-}
-
-impl Actionable for ActionClick {
-    fn get_data(&self) -> String {
-        self.selector.to_owned()
-    }
-
-    fn run(&self, tab: &Arc<Tab>) {
-        tab.wait_for_element(&self.selector).unwrap(); 
-
-        let el = tab.find_elements(&self.selector).unwrap();
-        let el = el.get(0).unwrap();
-
-        el.click();
-        println!("{} - {}", "Run click action...", self.selector);
-    }
-}
-
-impl Actionable for ActionWait {
-    fn get_data(&self) -> String {
-        
-        self.duration.to_string()
-    }
-
-    fn run(&self, tab: &Arc<Tab>) {
-        
-        println!("Run wait action for {} msecs", self.duration);
-    }
-}
-
-impl Target {
-
-    pub fn find_element(self, tab: &Arc<Tab>) -> String{
-
-        if self.selector.starts_with("/") { // xpath
-
-            let el = tab.find_element_by_xpath(&self.selector).unwrap();
-            return el.get_inner_text().unwrap();
-        } else {
-            let el = tab.find_element(&self.selector).unwrap();
-            return el.get_inner_text().unwrap();
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct Pipeline {
     pub name: String,
@@ -107,4 +56,44 @@ pub struct PipelineConfig {
 
     pub targets: Vec<Target>,
     pub actions: Vec<Action>
+}
+
+pub struct ScrapingPipeline {
+
+    pipeline_config: PipelineConfig,
+    scraper: Scraper
+
+}
+
+impl ScrapingPipeline {
+    
+    pub fn from_file(config_source: &str, scraper: Scraper) -> ScrapingPipeline {
+
+        let f = std::fs::File::open(config_source).unwrap();
+        let pipeline_config: PipelineConfig = serde_yaml::from_reader(f).unwrap();
+
+        ScrapingPipeline { pipeline_config, scraper }
+    }
+
+}
+
+impl Display for ScrapingPipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        
+        let pipeline = &self.pipeline_config;
+
+        writeln!(f, "TARGETS");
+        for target in &pipeline.targets {
+
+            writeln!(f, "{} - {}", target.name, target.selector);
+        }
+
+        writeln!(f, "\nACTIONS");
+        for action in &pipeline.actions {
+
+            writeln!(f, "{} - {}", action.name, action.class);
+        }
+
+        Ok(())
+    }
 }

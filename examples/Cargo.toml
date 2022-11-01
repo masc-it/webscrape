@@ -16,3 +16,7 @@ path = "simple.rs"
 [[example]]
 name = "proxies"
 path = "proxies.rs"
+
+[[example]]
+name = "pipeline_simple"
+path = "pipeline_simple.rs"
