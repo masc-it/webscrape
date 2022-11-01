@@ -3,10 +3,12 @@
 use std::{fmt::Display, collections::HashMap};
 
 use serde::{Serialize, Deserialize};
+use tabled::{Tabled, Panel, Width, measurment::Percent, Modify, object::{Segment, Rows}, Alignment, style::HorizontalLine, Style};
 
 use crate::scraper::{Scraper, DOMElement};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Tabled)]
+#[tabled(rename_all = "UPPERCASE")]
 pub struct Target {
 
     #[serde(skip)]
@@ -49,7 +51,8 @@ pub enum ActionData {
     // Other possible response types here...
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Tabled)]
+#[tabled(rename_all = "UPPERCASE")]
 pub struct Action {
 
     #[serde(skip)]
@@ -141,39 +144,61 @@ impl ScrapingPipeline {
 }
 
 impl Display for ScrapingPipeline {
+
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         
         let pipeline = &self.pipeline_config;
 
-        let term_size = termsize::get().unwrap();
+        //let separator = str::repeat("-", (80 - 4));
 
-        let separator = str::repeat("-", (term_size.cols - 4).into());
+        let mut targets_data: Vec<&Target> = Vec::default();
 
-        writeln!(f, "+{}+", &separator);
-        writeln!(f, "|  TARGETS");
-        for (name, target) in &pipeline.targets {
+        for (_, target) in &pipeline.targets {
 
-            writeln!(f, "|   {}", name);
-            writeln!(f, "|     |--> {}", target.selector);
+            targets_data.push(target);
         }
 
-        writeln!(f, "+{}+", &separator);
-        writeln!(f, "|  ACTIONS");
-        for (name, action) in &pipeline.actions {
+        let mut actions_data: Vec<&Action> = Vec::default();
 
-            writeln!(f, "|   {}", name);
-            writeln!(f, "|     |--> {}", action.class);
-            writeln!(f, "|     |--> {}", action.data);
+        for (_, target) in &pipeline.actions {
+
+            actions_data.push(target);
         }
 
-        writeln!(f, "+{}+", &separator);
-        writeln!(f, "|  STEPS");
-        for (i, step) in pipeline.steps.iter().enumerate() {
+        let mut table_targets = tabled::Table::new(targets_data);
+        
+        table_targets.with(Panel::header("TARGETS"));
+        table_targets.with(tabled::Style::sharp().horizontals(
+            [HorizontalLine::new(1, Style::modern().get_horizontal())
+                    .main(Some('═'))
+                    .intersection(None),
+                    HorizontalLine::new(2, Style::modern().get_horizontal())
+                    .main(Some('═'))
+                    .intersection(None)
+                ]
+        ));
+        table_targets.with(Modify::new(Rows::new(0..=1)).with(Alignment::center()));
+        table_targets.with(tabled::Style::correct_spans());
 
-            writeln!(f, "|   {}. {}", i+1, step);
-        }
+        let mut table_actions = tabled::Table::new(actions_data);
+        
+        table_actions.with(Panel::header("ACTIONS"));
+        table_actions.with(tabled::Style::sharp().horizontals(
+            [HorizontalLine::new(1, Style::modern().get_horizontal())
+                    .main(Some('═'))
+                    .intersection(None),
+                    HorizontalLine::new(2, Style::modern().get_horizontal())
+                    .main(Some('═'))
+                    .intersection(None)
+                ]
+        ));
+        table_actions.with(Modify::new(Rows::new(0..=1)).with(Alignment::center()));
+        table_actions.with(tabled::Style::correct_spans());
 
-        writeln!(f, "+{}+", &separator);
+        writeln!(f, "{}", table_targets);
+        writeln!(f, "{}", table_actions);
+
+        
         Ok(())
     }
 }

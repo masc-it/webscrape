@@ -18,7 +18,7 @@ serde = "1.0"
 serde_yaml = "0.9.14"
 base64 = "0.13.1"
 rand = "0.8.5"
-termsize = "0.1"
+tabled = "0.10.0"
 
 [lib]
 name = "webscrape"
