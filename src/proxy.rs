@@ -1,4 +1,4 @@
-use std::{io::{self, BufRead}, fs::File, collections::HashMap};
+use std::{io::{self, BufRead}, fs::File};
 
 #[derive(Eq, Hash, PartialEq, Default)]
 pub enum ProxyField {
@@ -8,16 +8,6 @@ pub enum ProxyField {
     Password
 }
 
-pub trait FromCSVBuilder {
-
-    fn set_source<S: AsRef<str> + Clone>(&mut self, file_or_url: S) -> &mut CSVProxyListBuilder;
-
-    fn set_columns(&mut self, columns: [ProxyField; 4]) -> &mut CSVProxyListBuilder;
-
-    fn set_separator<S: AsRef<str> + Clone>(&mut self, separator: S) -> &mut CSVProxyListBuilder;
-
-    fn build(&self) -> Vec<SimpleProxy>;
-}
 
 pub struct CSVProxyListBuilder {
 
@@ -34,24 +24,24 @@ impl Default for CSVProxyListBuilder {
     }
 }
 
-impl FromCSVBuilder for CSVProxyListBuilder {
-    fn set_source<S: AsRef<str> + Clone>(&mut self, file_or_url: S) -> &mut CSVProxyListBuilder {
+impl CSVProxyListBuilder {
+    pub fn set_source<S: AsRef<str> + Clone>(&mut self, file_or_url: S) -> &mut CSVProxyListBuilder {
         self.source = file_or_url.as_ref().to_string();
 
         self
     }
 
-    fn set_separator<S: AsRef<str> + Clone>(&mut self, separator: S) -> &mut CSVProxyListBuilder {
+    pub fn set_separator<S: AsRef<str> + Clone>(&mut self, separator: S) -> &mut CSVProxyListBuilder {
         self.separator = separator.as_ref().to_string();
         self
     }
 
-    fn set_columns(&mut self, columns: [ProxyField; 4]) -> &mut CSVProxyListBuilder {
+    pub fn set_columns(&mut self, columns: [ProxyField; 4]) -> &mut CSVProxyListBuilder {
         self.fields = columns;
         self
     }
 
-    fn build(&self) -> Vec<SimpleProxy> {
+    pub fn build(&self) -> Vec<SimpleProxy> {
         
         let source_file = match self.source.starts_with("http") {
 
@@ -73,8 +63,6 @@ impl FromCSVBuilder for CSVProxyListBuilder {
         };
 
         let host_pos = self.fields.iter().position(|e| *e == ProxyField::Host).expect("Port column should be defined.");
-        //let host_pos = self.parts_pos.get(&ProxyField::Host).expect("Host position should be defined.").to_owned();
-        //let port_pos = self.parts_pos.get(&ProxyField::Port).expect("Port position should be defined.").to_owned();
         
         let port_pos = self.fields.iter().position(|e| *e == ProxyField::Port).expect("Port column should be defined.");
 
@@ -124,47 +112,4 @@ impl SimpleProxy {
 
     }
 
-    // https://proxy.webshare.io/proxy/list/download/exjkedupbocjavbsvygpqxginbabldofjdednvdb/-/http/username/direct/
-    pub fn from_csv(proxy_list_source: String, split_on: String, host_pos: usize, port_pos: usize, user_pos: usize, pass_pos: usize) -> Vec<SimpleProxy>{
-
-        let out = match proxy_list_source.starts_with("http") {
-
-            true => {
-                let mut resp = reqwest::blocking::get(&proxy_list_source).expect("request failed");
-                let mut out = File::create("proxies.csv").unwrap();
-
-                io::copy(&mut resp, &mut out).expect("failed to copy content");
-                out.sync_all().unwrap();
-                std::fs::File::open("proxies.csv").unwrap()
-
-            },
-            false => {
-                std::fs::File::open(proxy_list_source).unwrap()
-            }
-            
-        };
-
-        let mut proxies: Vec<SimpleProxy> = vec![];
-        
-        let lines = std::io::BufReader::new(out).lines();
-
-        for line in lines {
-            if let Ok(proxy_string) = line {
-                let parts = proxy_string.split(&split_on).collect::<Vec<&str>>();
-
-                let p = SimpleProxy {
-                    host: parts.get(host_pos).unwrap().to_string(),
-                    port: parts.get(port_pos).unwrap().to_string(),
-                    user: parts.get(user_pos).unwrap().to_string(),
-                    password: parts.get(pass_pos).unwrap().to_string(),
-                };
-
-                proxies.push(p);
-
-            }
-        }
-
-
-        proxies
-    }
 }

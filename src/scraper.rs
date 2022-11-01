@@ -15,16 +15,7 @@ use headless_chrome::{
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use super::proxy::SimpleProxy;
-
-pub trait Builder {
-
-    fn set_headless(&mut self, headless: bool) -> &mut ScraperBuilder;
-    fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder;
-    fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder;
-
-    fn build(&self) -> Scraper;
-}
+use crate::proxy::SimpleProxy;
 
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
@@ -38,23 +29,23 @@ impl Default for ScraperBuilder {
     }
 }
 
-impl Builder for ScraperBuilder {
+impl ScraperBuilder {
 
-    fn set_headless(&mut self, headless: bool) -> &mut ScraperBuilder {
+    pub fn set_headless(&mut self, headless: bool) -> &mut ScraperBuilder {
         self.headless = headless;
         self
     }
-    fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder {
+    pub fn set_default_timeout(&mut self, default_timeout: u64) -> &mut ScraperBuilder {
         self.default_timeout = default_timeout;
         self
     }
 
-    fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder {
+    pub fn set_proxies(&mut self, proxies: Vec<SimpleProxy>) -> &mut ScraperBuilder {
         self.proxies = proxies;
         self
     }
 
-    fn build(&self) -> Scraper {
+    pub fn build(&self) -> Scraper {
         let browser = Browser::new(LaunchOptions {
             //args: vec![&proxy_arg],
             headless: self.headless,
@@ -148,7 +139,7 @@ impl Builder for ScraperBuilder {
                     RequestPausedDecision::Fulfill(fulfill_request)
                 } else if intercepted.params.resource_Type != ResourceType::Document {
                     RequestPausedDecision::Continue(None)
-                } else {
+                } else { // TODO: block some resources
                     RequestPausedDecision::Fail(FailRequest {
                         request_id: intercepted.params.request_id,
                         error_reason:
@@ -212,8 +203,6 @@ impl Scraper {
         self
     }
 
-    // TODO: list of lists or MAP
-    // TODO: flatten()
     pub fn collect(&mut self) -> HashMap<String, DOMElement> {
         let r = self.elements.clone();
         self.elements.clear();

@@ -1,7 +1,6 @@
 #![allow(unused_must_use)]
 
-use std::{collections::HashMap, sync::Arc};
-use headless_chrome::Browser;
+use std::{sync::Arc};
 
 use headless_chrome::browser::tab::Tab;
 
