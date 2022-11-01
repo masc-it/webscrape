@@ -11,9 +11,18 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("--------------------");
 
-    let pipeline = ScrapingPipeline::from_file(&pipeline_file, scraper);
+    let mut pipeline = ScrapingPipeline::from_file(&pipeline_file, scraper);
     
     print!("{}", pipeline);
 
+    /* let res = pipeline.run();
+
+    for (name, el) in res {
+        println!("{:?}", el.text);
+
+        for (k, v) in el.attrs {
+            println!("{} - {}", k, v);
+        }
+    } */
     Ok(())
 }
