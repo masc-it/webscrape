@@ -3,7 +3,7 @@
 use std::{fmt::Display, collections::HashMap};
 
 use serde::{Serialize, Deserialize};
-use tabled::{Tabled, Panel, Width, measurment::Percent, Modify, object::{Segment, Rows}, Alignment, style::HorizontalLine, Style};
+use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style};
 
 use crate::scraper::{Scraper, DOMElement};
 

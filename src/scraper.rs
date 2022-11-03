@@ -17,6 +17,32 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::proxy::SimpleProxy;
 
+
+#[derive(Clone)]
+/// It contains all the metadata of a scraped element.
+pub struct DOMElement {
+    
+    pub text: String,
+    pub attrs: HashMap<String, String>
+}
+
+/// Scraper is the main player of this crate. <br>
+/// It wraps a Chrome browser and high level interfaces to scrape DOM elements and run automated actions.
+pub struct Scraper {
+    pub proxy: Vec<SimpleProxy>,
+
+    pub default_timeout: u64,
+
+    browser: Browser,
+    tab: Arc<Tab>,
+
+    current_url: Option<String>,
+
+    elements: HashMap<String, DOMElement>
+}
+
+/// Just a builder for the Scraper struct. <br>
+/// You can use it to build new Scraper instances.
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
     pub default_timeout: u64,
@@ -28,6 +54,7 @@ impl Default for ScraperBuilder {
         Self { proxies: vec![], default_timeout: 5, headless: true }
     }
 }
+
 
 impl ScraperBuilder {
 
@@ -45,9 +72,10 @@ impl ScraperBuilder {
         self
     }
 
+    /// It materializes a new Scraper instance with the provided properties.
     pub fn build(&self) -> Scraper {
+       
         let browser = Browser::new(LaunchOptions {
-            //args: vec![&proxy_arg],
             headless: self.headless,
             ..Default::default()
         })
@@ -59,6 +87,12 @@ impl ScraperBuilder {
         tab.enable_fetch(None, None).unwrap();
 
         let proxies = self.proxies.clone();
+
+        /* 
+        Tab interception is useful to:
+            - Enable request-level proxying
+            - Block requests based on mime type  
+        */
         tab.enable_request_interception(Arc::new(
             move |_: Arc<Transport>, _: SessionId, intercepted: RequestPausedEvent| {
                 // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
@@ -89,6 +123,7 @@ impl ScraperBuilder {
 
                     let mut req_headers: Vec<HeaderEntry> = vec![];
 
+                    // Build a header map to simulate a real browser request. 
                     let mut headers = reqwest::header::HeaderMap::new();
 
                     for (k, val) in headersmap {
@@ -107,7 +142,6 @@ impl ScraperBuilder {
                         value: "text/html; charset=utf-8".to_string(),
                     });
 
-                    //println!("running reqwest.. {}", intercepted.params.request.url);
                     let req_builder = reqwest::blocking::Client::builder();
 
                     let req_builder = match reqwest_proxy {
@@ -161,25 +195,7 @@ impl ScraperBuilder {
 }
 
 
-#[derive(Clone)]
-pub struct DOMElement {
 
-    pub text: String,
-    pub attrs: HashMap<String, String>
-}
-
-pub struct Scraper {
-    pub proxy: Vec<SimpleProxy>,
-
-    pub default_timeout: u64,
-
-    browser: Browser,
-    tab: Arc<Tab>,
-
-    current_url: Option<String>,
-
-    elements: HashMap<String, DOMElement>
-}
 
 impl Scraper {
     pub fn navigate_to<S: AsRef<str> + Clone>(&mut self, url: S) -> &mut Scraper {
