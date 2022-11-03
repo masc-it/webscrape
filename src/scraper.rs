@@ -294,7 +294,6 @@ impl Scraper {
         let mut attrs_map: HashMap<String, String> = HashMap::default();
 
         let attrs = el.get_attributes().unwrap().unwrap();
-        //println!("len {}", attrs.len());
 
         if attrs.len() > 0 {
 
