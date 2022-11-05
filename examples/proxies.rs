@@ -1,8 +1,9 @@
-use webscrape::{ScraperBuilder, proxy::{CSVProxyListBuilder, ProxyField}};
-
+use webscrape::{
+    proxy::{CSVProxyListBuilder, ProxyField},
+    ScraperBuilder,
+};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     let proxy_source = std::env::args().nth(1).expect("no proxy source given");
 
     println!("{}", proxy_source);
@@ -11,29 +12,41 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxies = csv_proxylist_builder
         .set_source(proxy_source)
         .set_separator(":")
-        .set_columns([ProxyField::Host, ProxyField::Port, ProxyField::Username, ProxyField::Password])
+        .set_columns([
+            ProxyField::Host,
+            ProxyField::Port,
+            ProxyField::Username,
+            ProxyField::Password,
+        ])
         .build();
-        
+
     let mut builder = ScraperBuilder::default();
 
-    let mut scraper = builder.set_headless(true).set_default_timeout(5).set_proxies(proxies).build();
+    let mut scraper = builder
+        .set_headless(true)
+        .set_default_timeout(5)
+        .set_proxies(proxies)
+        .build();
 
     println!("--------------------");
 
-    let elements = scraper
+    let result = scraper
         .navigate_to("https://stackoverflow.com/questions/58787864/changing-primary-palette-color-when-using-kivymd-has-no-effect-on-buttons")
         .find_elements_by_xpath("last_activity", "//a[contains(@href, 'lastact')]")
         .find_elements_by_xpath("question", "//h1/a[contains(@class, 'question-hyperlink')]")
         .find_elements_by_xpath("views", "//div[contains(@title, 'Viewed')]")
         .collect();
 
-    for (name, el) in elements {
-        println!("{:?}", el.text);
+    for (name, els) in result.elements {
+        for el in &els {
+            println!("{:?}", el.text);
 
-        println!("{:?}", el.attrs.get("id").unwrap_or(&"NONE".to_string()));
+            println!("{:?}", el.attrs.get("id").unwrap_or(&"NONE".to_string()));
 
-        for (k, v) in el.attrs {
-            println!("{} - {}", k, v);
+            for (k, v) in &el.attrs {
+                println!("{} - {}", k, v);
+            }
+            println!("--------------------");
         }
     }
 

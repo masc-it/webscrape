@@ -7,7 +7,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut builder = ScraperBuilder::default();
 
-    let scraper = builder.set_headless(true).set_default_timeout(5).build();
+    let scraper = builder.set_headless(false).set_default_timeout(5).build();
 
     println!("--------------------");
 
@@ -15,14 +15,28 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     print!("{}", pipeline);
 
-    /* let res = pipeline.run();
+    for step in &pipeline.get_steps() {
+        println!("{}", step);
+    }
+    let mut line = String::new();
+    print!("Run : ");
+    let b1 = std::io::stdin().read_line(&mut line).unwrap();
 
-    for (name, el) in res {
-        println!("{:?}", el.text);
+    let res = pipeline.run();
 
-        for (k, v) in el.attrs {
-            println!("{} - {}", k, v);
+    println!("num: {}", &res.elements.len());
+
+    for (name, els) in res.elements {
+
+        println!("TARGET: {}", name);
+        for el in &els {
+            println!("{:?}", el.text);
+
+            for (k, v) in &el.attrs {
+                println!("{} - {}", k, v);
+            }
+            println!("--------------------");
         }
-    } */
+    }
     Ok(())
 }
