@@ -5,7 +5,7 @@ use std::{fmt::Display, collections::HashMap};
 use serde::{Serialize, Deserialize};
 use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style};
 
-use crate::scraper::{Scraper, DOMElement};
+use crate::scraper::{Scraper, DOMElement, ScrapingResult};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tabled)]
 #[tabled(rename_all = "UPPERCASE")]
@@ -17,41 +17,59 @@ pub struct Target {
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ActionClick {
-
-    pub selector: String
-}
-
 impl Display for ActionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         
         if let ActionData::ActionClick(selector) = self {
-
             write!(f, "{}", selector.selector);
         } else if let ActionData::ActionWait(selector) = self {
             write!(f, "{}", selector.duration);
+        } else if let ActionData::ActionType(selector) = self {
+            write!(f, "{}", selector.text);
+        } else if let ActionData::ActionScreenshot(selector) = self {
+            write!(f, "{}", selector.target);
         }
 
         Ok(())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActionClick {
+
+    pub selector: String
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActionWait {
 
     pub duration: u32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActionType {
+
+    pub target: String,
+    pub text: String
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActionScreenshot {
+
+    pub target: String
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ActionData {
     ActionClick(ActionClick),
-    ActionWait(ActionWait)
+    ActionScreenshot(ActionScreenshot),
+    ActionWait(ActionWait),
+    ActionType(ActionType),
     // Other possible response types here...
 }
 
-#[derive(Serialize, Deserialize, Tabled)]
+#[derive(Clone, Serialize, Deserialize, Tabled)]
 #[tabled(rename_all = "UPPERCASE")]
 pub struct Action {
 
@@ -79,6 +97,25 @@ impl PipelineObject for Target {
         } else {
             scraper.find_elements_by_css(n, s);
   
+        }
+        
+    }
+}
+
+impl PipelineObject for Action {
+
+    fn add(&mut self, scraper: &mut Scraper) {
+        
+        let n = self.name.clone();
+        
+        if let ActionData::ActionClick(a) = &self.data {
+            scraper.click(n, a.selector.to_string());
+        } else if let ActionData::ActionWait(a) = &self.data {
+            scraper.sleep(a.duration as u64);
+        } else if let ActionData::ActionType(a) = &self.data {
+            scraper.type_into(n, a.target.to_string(), a.text.to_string());
+        } else if let ActionData::ActionScreenshot(a) = &self.data {
+            scraper.screenshot(n, a.target.to_string());
         }
         
     }
@@ -128,14 +165,36 @@ impl ScrapingPipeline {
         ScrapingPipeline { pipeline_config, scraper }
     }
 
-    pub fn run(&mut self) -> HashMap<String, DOMElement> {
+    pub fn get_steps(&self) -> Vec<String> {
+
+        self.pipeline_config.steps.clone()
+    }
+
+    pub fn run(&mut self) -> ScrapingResult {
 
 
         self.scraper.navigate_to(self.pipeline_config.pipeline.url.to_string());
+
+        let targets = &self.pipeline_config.targets;
+
+        let actions = &self.pipeline_config.actions;
+
         for step in &self.pipeline_config.steps {
             
-            let t = &mut (self.pipeline_config.targets.get(step).unwrap().clone());
-            t.add(&mut self.scraper);
+            println!("{}", step);
+            
+            if targets.contains_key(step) {
+                let t = &mut (targets.get(step).unwrap().clone());
+                t.add(&mut self.scraper);
+            } else if actions.contains_key(step) {
+
+                let a = &mut (actions.get(step).unwrap().clone());
+                a.add(&mut self.scraper)
+                
+            } else {
+                println!("{} not implemented.", step);
+            }
+            
         }
 
         self.scraper.collect()

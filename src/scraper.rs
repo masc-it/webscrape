@@ -5,12 +5,12 @@ use headless_chrome::{
         tab::RequestPausedDecision,
         transport::{SessionId, Transport},
     },
-    protocol::cdp::{
+    protocol::{cdp::{
         Fetch::{
             events::RequestPausedEvent, FailRequest, FulfillRequest, HeaderEntry
         },
         Network::ResourceType,
-    },
+    }, self},
     Browser, Element, LaunchOptions, Tab,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -26,6 +26,11 @@ pub struct DOMElement {
     pub attrs: HashMap<String, String>
 }
 
+enum Selector {
+    CSS,
+    XPath
+}
+
 /// Scraper is the main player of this crate. <br>
 /// It wraps a Chrome browser and high level interfaces to scrape DOM elements and run automated actions.
 pub struct Scraper {
@@ -38,7 +43,9 @@ pub struct Scraper {
 
     current_url: Option<String>,
 
-    elements: HashMap<String, DOMElement>
+    elements: HashMap<String, Vec<DOMElement>>,
+
+    screenshots: HashMap<String, Vec<u8>>,
 }
 
 /// Just a builder for the Scraper struct. <br>
@@ -55,6 +62,12 @@ impl Default for ScraperBuilder {
     }
 }
 
+
+pub struct ScrapingResult {
+
+    pub elements: HashMap<String, Vec<DOMElement>>,
+    pub screenshots: HashMap<String, Vec<u8>>
+}
 
 impl ScraperBuilder {
 
@@ -190,6 +203,7 @@ impl ScraperBuilder {
             tab,
             current_url: None,
             elements: HashMap::default(),
+            screenshots: HashMap::default(),
         }
     }
 }
@@ -219,10 +233,16 @@ impl Scraper {
         self
     }
 
-    pub fn collect(&mut self) -> HashMap<String, DOMElement> {
-        let r = self.elements.clone();
+    pub fn collect(&mut self) -> ScrapingResult {
+
+        let res = ScrapingResult {
+            elements: self.elements.clone(),
+            screenshots: self.screenshots.clone()
+        };
+        
         self.elements.clear();
-        r
+        self.screenshots.clear();
+        res
     }
 
     pub fn find_elements_by_css<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper 
@@ -231,7 +251,7 @@ impl Scraper {
         let name = name.as_ref();
 
         if target.starts_with("/") {
-            println!("Invalid CSS selector.");
+            println!("Invalid CSS selector: {}", target);
             return self;
         }
 
@@ -245,13 +265,12 @@ impl Scraper {
 
         let elements = match query_result {
             Ok(elements) => elements,
-            Err(_) => vec![],
+            Err(_) => {println!("Element {} not found", name); vec![]},
         };
 
-        for el in &elements {
+        let dom_els: Vec<DOMElement> = elements.iter().map(|el| self.build_dom_element(el)).collect();
 
-            self.elements.insert(name.to_string(), self.build_dom_element(el));
-        }
+        self.elements.insert(name.to_string(), dom_els);
         
 
         return self;
@@ -263,7 +282,7 @@ impl Scraper {
         let name = name.as_ref();
 
         if !target.starts_with("/") {
-            println!("Invalid XPath selector.");
+            println!("Invalid XPath selector: {}", target);
             return self;
         }
 
@@ -277,15 +296,13 @@ impl Scraper {
 
         let elements = match query_result {
             Ok(elements) => elements,
-            Err(_) => vec![],
+            Err(_) => {println!("Element {} not found", name); vec![]},
         };
 
-        for el in &elements {
+        let dom_els: Vec<DOMElement> = elements.iter().map(|el| self.build_dom_element(el)).collect();
 
-            let dom_el = self.build_dom_element(el);
-            self.elements.insert(name.to_string(), dom_el);
-        }
-
+        self.elements.insert(name.to_string(), dom_els);
+        
         return self;
     }
 
@@ -312,6 +329,87 @@ impl Scraper {
         };
 
         dom_el
+    }
+
+    fn get_selector_type<S: AsRef<str> + Clone>(&self, target: &S) -> Selector {
+
+        let target = target.as_ref();
+        if target.starts_with("/") {
+            return Selector::XPath;
+        }
+
+        Selector::CSS
+    }
+
+    pub fn click<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper {
+
+        let target = target.as_ref();
+        let selector_type = self.get_selector_type(&target);
+
+        let res = match selector_type {
+            Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.click().and_then(|_r| Ok(true))}),
+            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().click().and_then(|_r| Ok(true))}),
+        };
+
+        if res.is_err() {
+            println!("Couldn't find element: {}", name.as_ref());
+        }
+
+        if let Err(_) = self.tab.wait_until_navigated() {
+            println!("Page load timeout..");
+        }
+
+        let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5));
+        
+        if r.is_err() {
+            println!("Page load timeout..");
+        }
+
+
+        self
+    }
+
+    pub fn type_into<S: AsRef<str> + Clone>(&mut self, name: S, target: S, text: S) -> &mut Scraper {
+
+        let target = target.as_ref();
+        let name = name.as_ref();
+        let text = text.as_ref();
+
+        let selector_type = self.get_selector_type(&target);
+
+        let res = match selector_type {
+            Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.type_into(&text).and_then(|_r| Ok(true))}),
+            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().type_into(&text).and_then(|_r| Ok(true))}),
+        };
+
+        if res.is_err() {
+            println!("Couldn't find element: {}", name);
+        }
+
+        self
+    }
+
+    pub fn screenshot<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper {
+
+        let target = target.as_ref();
+        let name = name.as_ref();
+
+        let selector_type = self.get_selector_type(&target);
+
+        let res = match selector_type {
+            Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.capture_screenshot(protocol::cdp::Page::CaptureScreenshotFormatOption::Png).and_then(|r| Ok(r))}),
+            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().capture_screenshot(protocol::cdp::Page::CaptureScreenshotFormatOption::Png).and_then(|r| Ok(r))}),
+        };
+
+        if res.is_err() {
+            println!("Couldn't find element: {}", name);
+        } else {
+
+            let img_data = res.unwrap();
+            self.screenshots.insert(name.to_string(), img_data);
+        }
+
+        self
     }
 
 }
