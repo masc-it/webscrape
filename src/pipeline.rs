@@ -175,24 +175,51 @@ impl ScrapingPipeline {
 
         self.scraper.navigate_to(self.pipeline_config.pipeline.url.to_string());
 
-        let targets = &self.pipeline_config.targets;
+        let targets = &mut self.pipeline_config.targets;
 
-        let actions = &self.pipeline_config.actions;
+        let actions = &mut self.pipeline_config.actions;
 
         for step in &self.pipeline_config.steps {
             
-            println!("{}", step);
-            
-            if targets.contains_key(step) {
-                let t = &mut (targets.get(step).unwrap().clone());
-                t.add(&mut self.scraper);
-            } else if actions.contains_key(step) {
+            let mut step_name = step.to_string();
 
-                let a = &mut (actions.get(step).unwrap().clone());
+            if step.contains(" from ") {
+
+                let parts = step.split(" from ").collect::<Vec<&str>>();
+                let new_name = parts.get(0).unwrap().to_string();
+
+                let from_name = parts.get(1).unwrap().to_string();
+
+                if targets.contains_key(&from_name) {
+
+                    let mut new_t = targets.get(&from_name).unwrap().clone();
+                    new_t.name = new_name.to_string();
+
+                    step_name = new_t.name.clone();
+                    targets.insert(step_name.clone(), new_t);
+                } else if actions.contains_key(&step_name) {
+                    let mut new_t = actions.get(&from_name).unwrap().clone();
+                    new_t.name = new_name.to_string();
+
+                    step_name = new_t.name.clone();
+                    actions.insert(step_name.clone(), new_t);
+                } else {
+                    println!("Invalid alias: {}", step_name);
+                }
+            }
+
+            println!("{}", step_name);
+
+            if targets.contains_key(&step_name) {
+                let t = &mut (targets.get(&step_name).unwrap().clone());
+                t.add(&mut self.scraper);
+            } else if actions.contains_key(&step_name) {
+
+                let a = &mut (actions.get(&step_name).unwrap().clone());
                 a.add(&mut self.scraper)
                 
             } else {
-                println!("{} not implemented.", step);
+                println!("{} not implemented.", &step_name);
             }
             
         }
