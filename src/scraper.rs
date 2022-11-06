@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, collections::HashMap};
+use std::{str::FromStr, sync::Arc, collections::HashMap, path::Path};
 
 use headless_chrome::{
     browser::{
@@ -14,11 +14,12 @@ use headless_chrome::{
     Browser, Element, LaunchOptions, Tab,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use serde::Serialize;
 
 use crate::proxy::SimpleProxy;
 
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 /// It contains all the metadata of a scraped element.
 pub struct DOMElement {
     
@@ -424,4 +425,15 @@ impl Scraper {
         self
     }
 
+
+    pub fn save(&self, targets: &Vec<String>, save_path: &Path ) {
+
+        let mut els = self.elements.clone();
+        els.retain(|k,_| targets.contains(k));
+
+        let s = serde_json::to_string_pretty(&els).unwrap();
+
+        std::fs::write(save_path, s).unwrap();
+        
+    }
 }

@@ -2,3 +2,8 @@ target/
 *.lock
 *.yaml
 *.csv
+*.png
+*.jpeg
+*.json
+
+!examples/config/*.yaml

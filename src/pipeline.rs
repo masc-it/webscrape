@@ -1,6 +1,6 @@
 #![allow(unused_must_use)]
 
-use std::{fmt::Display, collections::HashMap};
+use std::{fmt::Display, collections::HashMap, path::Path};
 
 use serde::{Serialize, Deserialize};
 use tabled::{Tabled, Panel, Modify, object::{Rows, Column, Row}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
@@ -61,12 +61,20 @@ pub struct ActionScreenshot {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActionSave {
+
+    pub targets: Vec<String>,
+    pub save_path: String
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ActionData {
     ActionClick(ActionClick),
     ActionScreenshot(ActionScreenshot),
     ActionWait(ActionWait),
     ActionTypeInto(ActionTypeInto),
+    ActionSave(ActionSave)
     // Other possible response types here...
 }
 
@@ -121,6 +129,7 @@ impl PipelineObject for Action {
             },
             ActionData::ActionWait(a) => {scraper.sleep(a.duration as u64);},
             ActionData::ActionTypeInto(a) => {scraper.type_into(n, a.target.to_string(), a.text.to_string());}
+            ActionData::ActionSave(a) => {scraper.save(&a.targets, &Path::new(&a.save_path));},
         };
         
     }

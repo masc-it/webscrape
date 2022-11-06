@@ -17,9 +17,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     print!("{}", pipeline);
 
-    /* for step in &pipeline.get_steps() {
-        println!("{}", step);
-    }
+    
+    
     let mut line = String::new();
     print!("Run : ");
     let b1 = std::io::stdin().read_line(&mut line).unwrap();
@@ -35,6 +34,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let s_name = format!("{}.png", &name);
         save_screenshot(&img_data, &Path::new(&s_name)).unwrap();
 
-    } */
+    }
     Ok(())
 }

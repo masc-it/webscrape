@@ -1,0 +1,29 @@
+name: Take screenshot
+url: "https://stackoverflow.com/questions/58787864/changing-primary-palette-color-when-using-kivymd-has-no-effect-on-buttons"
+targets:
+  element_1: 
+    selector: "//a[contains(@href, 'lastact')]"
+actions:
+  screen1:
+    target: "//a[contains(@href, 'lastact')]"
+    format: PNG
+  screen2:
+    target: "#question-header h1"
+    format: PNG
+  screen3:
+    target: "//body"
+    format: PNG
+  save1:
+    save_path: els.json
+    targets: 
+      - element_1
+      - element_2
+steps:
+  - element_1
+  - save1
+  - screen1
+  - screen2
+  - screen3
+  - element_2 from element_1
+  - save1
+  
