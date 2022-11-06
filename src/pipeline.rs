@@ -253,7 +253,9 @@ impl Display for ScrapingPipeline {
             actions_data.push(target);
         }
 
-        let steps = &pipeline.steps;
+        let steps = pipeline.steps.clone();
+
+        let steps: Vec<String> = steps.iter().enumerate().map(|(i, s)| format!("{}. {}", i+1, s)).collect();
 
         let mut table_targets = tabled::Table::new(targets_data);
         
@@ -270,6 +272,7 @@ impl Display for ScrapingPipeline {
         table_targets.with(Modify::new(Rows::new(0..=1)).with(Alignment::center()));
         table_targets.with(tabled::Style::correct_spans());
 
+        let w = table_targets.total_width();
         let mut table_actions = tabled::Table::new(actions_data);
         
         table_actions.with(Panel::header("ACTIONS"));
@@ -285,6 +288,7 @@ impl Display for ScrapingPipeline {
         table_actions.with(Modify::new(Rows::new(0..=1)).with(Alignment::center()));
         table_actions.with(tabled::Style::correct_spans());
 
+        table_actions.with(tabled::Width::increase(w).priority::<tabled::peaker::PriorityMax>());
 
         let mut table_steps = tabled::Table::new(steps);
         table_steps.with(Panel::header("STEPS"));
@@ -292,7 +296,15 @@ impl Display for ScrapingPipeline {
         
         table_steps.with(tabled::Style::sharp());
 
-        
+        table_steps.with(tabled::Style::sharp().horizontals(
+            [HorizontalLine::new(1, Style::modern().get_horizontal())
+                    .main(Some('═'))
+                    .intersection(None),
+                ]
+        ));
+        table_steps.with(Modify::new(Rows::first()).with(Alignment::center()));
+        table_steps.with(tabled::Width::increase(w).priority::<tabled::peaker::PriorityMax>());
+
         writeln!(f, "{}", table_targets);
         writeln!(f, "{}", table_actions);
         writeln!(f, "{}", table_steps);
