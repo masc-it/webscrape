@@ -3,9 +3,9 @@
 use std::{fmt::Display, collections::HashMap};
 
 use serde::{Serialize, Deserialize};
-use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style};
+use tabled::{Tabled, Panel, Modify, object::{Rows, Column, Row}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
 
-use crate::scraper::{Scraper, DOMElement, ScrapingResult};
+use crate::scraper::{Scraper, DOMElement, ScrapingResult, ScreenshotFormat};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tabled)]
 #[tabled(rename_all = "UPPERCASE")]
@@ -24,7 +24,7 @@ impl Display for ActionData {
             write!(f, "{}", selector.selector);
         } else if let ActionData::ActionWait(selector) = self {
             write!(f, "{}", selector.duration);
-        } else if let ActionData::ActionType(selector) = self {
+        } else if let ActionData::ActionTypeInto(selector) = self {
             write!(f, "{}", selector.text);
         } else if let ActionData::ActionScreenshot(selector) = self {
             write!(f, "{}", selector.target);
@@ -47,7 +47,7 @@ pub struct ActionWait {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ActionType {
+pub struct ActionTypeInto {
 
     pub target: String,
     pub text: String
@@ -56,7 +56,8 @@ pub struct ActionType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActionScreenshot {
 
-    pub target: String
+    pub target: String,
+    pub format: String
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,7 +66,7 @@ pub enum ActionData {
     ActionClick(ActionClick),
     ActionScreenshot(ActionScreenshot),
     ActionWait(ActionWait),
-    ActionType(ActionType),
+    ActionTypeInto(ActionTypeInto),
     // Other possible response types here...
 }
 
@@ -75,7 +76,6 @@ pub struct Action {
 
     #[serde(skip)]
     pub name: String,
-    pub class: String,
     #[serde(flatten)]
     pub data: ActionData
 }
@@ -92,7 +92,7 @@ impl PipelineObject for Target {
         let n = self.name.clone();
         let s = self.selector.clone();
 
-        if s.starts_with("/") {
+        if s.starts_with("/") { // TODO: xpath and css validation
             scraper.find_elements_by_xpath(n, s);
         } else {
             scraper.find_elements_by_css(n, s);
@@ -108,28 +108,33 @@ impl PipelineObject for Action {
         
         let n = self.name.clone();
         
-        if let ActionData::ActionClick(a) = &self.data {
-            scraper.click(n, a.selector.to_string());
-        } else if let ActionData::ActionWait(a) = &self.data {
-            scraper.sleep(a.duration as u64);
-        } else if let ActionData::ActionType(a) = &self.data {
-            scraper.type_into(n, a.target.to_string(), a.text.to_string());
-        } else if let ActionData::ActionScreenshot(a) = &self.data {
-            scraper.screenshot(n, a.target.to_string());
-        }
+        match &self.data {
+            ActionData::ActionClick(a) => {scraper.click(n, a.selector.to_string());},
+            ActionData::ActionScreenshot(a) => {
+                
+                let format = match a.format.as_str() {
+                    "JPEG" => ScreenshotFormat::JPEG,
+                    "PNG" => ScreenshotFormat::PNG,
+                    _ => ScreenshotFormat::PNG,
+                };
+                scraper.screenshot(n, a.target.to_string(), format);
+            },
+            ActionData::ActionWait(a) => {scraper.sleep(a.duration as u64);},
+            ActionData::ActionTypeInto(a) => {scraper.type_into(n, a.target.to_string(), a.text.to_string());}
+        };
         
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Pipeline {
+struct Pipeline {
 
     pub name: String,
     pub url: String
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct PipelineConfig {
+struct PipelineConfig {
 
     #[serde(flatten)]
     pub pipeline: Pipeline,
@@ -185,20 +190,17 @@ impl ScrapingPipeline {
 
             if step.contains(" from ") {
 
-                let parts = step.split(" from ").collect::<Vec<&str>>();
-                let new_name = parts.get(0).unwrap().to_string();
+                let (new_name, from_name) = step.split_once(" from ").unwrap();
 
-                let from_name = parts.get(1).unwrap().to_string();
+                if targets.contains_key(from_name) {
 
-                if targets.contains_key(&from_name) {
-
-                    let mut new_t = targets.get(&from_name).unwrap().clone();
+                    let mut new_t = targets.get(from_name).unwrap().clone();
                     new_t.name = new_name.to_string();
 
                     step_name = new_t.name.clone();
                     targets.insert(step_name.clone(), new_t);
                 } else if actions.contains_key(&step_name) {
-                    let mut new_t = actions.get(&from_name).unwrap().clone();
+                    let mut new_t = actions.get(from_name).unwrap().clone();
                     new_t.name = new_name.to_string();
 
                     step_name = new_t.name.clone();
@@ -251,6 +253,8 @@ impl Display for ScrapingPipeline {
             actions_data.push(target);
         }
 
+        let steps = &pipeline.steps;
+
         let mut table_targets = tabled::Table::new(targets_data);
         
         table_targets.with(Panel::header("TARGETS"));
@@ -281,9 +285,17 @@ impl Display for ScrapingPipeline {
         table_actions.with(Modify::new(Rows::new(0..=1)).with(Alignment::center()));
         table_actions.with(tabled::Style::correct_spans());
 
+
+        let mut table_steps = tabled::Table::new(steps);
+        table_steps.with(Panel::header("STEPS"));
+        table_steps.with(Disable::row(Rows::single(1)));
+        
+        table_steps.with(tabled::Style::sharp());
+
+        
         writeln!(f, "{}", table_targets);
         writeln!(f, "{}", table_actions);
-
+        writeln!(f, "{}", table_steps);
         
         Ok(())
     }

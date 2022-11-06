@@ -31,6 +31,11 @@ enum Selector {
     XPath
 }
 
+pub enum ScreenshotFormat {
+    JPEG,
+    PNG
+}
+
 /// Scraper is the main player of this crate. <br>
 /// It wraps a Chrome browser and high level interfaces to scrape DOM elements and run automated actions.
 pub struct Scraper {
@@ -389,25 +394,32 @@ impl Scraper {
         self
     }
 
-    pub fn screenshot<S: AsRef<str> + Clone>(&mut self, name: S, target: S) -> &mut Scraper {
+    pub fn screenshot<S: AsRef<str> + Clone>(&mut self, name: S, target: S, format: ScreenshotFormat) -> &mut Scraper {
 
         let target = target.as_ref();
         let name = name.as_ref();
 
+        let format = match format {
+            ScreenshotFormat::JPEG => protocol::cdp::Page::CaptureScreenshotFormatOption::Jpeg,
+            ScreenshotFormat::PNG => protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
+            _ => protocol::cdp::Page::CaptureScreenshotFormatOption::Png
+        };
+
         let selector_type = self.get_selector_type(&target);
 
         let res = match selector_type {
-            Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.capture_screenshot(protocol::cdp::Page::CaptureScreenshotFormatOption::Png).and_then(|r| Ok(r))}),
-            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().capture_screenshot(protocol::cdp::Page::CaptureScreenshotFormatOption::Png).and_then(|r| Ok(r))}),
+            Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.capture_screenshot(format).and_then(|r| Ok(r))}),
+            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().capture_screenshot(format).and_then(|r| Ok(r))}),
         };
 
-        if res.is_err() {
-            println!("Couldn't find element: {}", name);
-        } else {
+        let Ok(img_data) = res else {
 
-            let img_data = res.unwrap();
-            self.screenshots.insert(name.to_string(), img_data);
-        }
+            println!("Couldn't find element: {}", name);
+            return self;
+        };
+
+        self.screenshots.insert(name.to_string(), img_data);
+        
 
         self
     }
