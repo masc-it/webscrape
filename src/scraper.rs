@@ -13,6 +13,7 @@ use headless_chrome::{
     }, self},
     Browser, Element, LaunchOptions, Tab,
 };
+
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Serialize;
 
@@ -56,6 +57,8 @@ pub struct Scraper {
 
 /// Just a builder for the Scraper struct. <br>
 /// You can use it to build new Scraper instances.
+/// 
+
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
     pub default_timeout: u64,
