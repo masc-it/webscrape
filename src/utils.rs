@@ -1,8 +1,5 @@
 use std::{path::Path};
 
-use pyo3::pyfunction;
-
-
 pub fn save_screenshot(img_data: &Vec<u8>, file_path: &Path) -> Result<bool, String> {
 
     if file_path.exists() {
