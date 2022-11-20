@@ -9,7 +9,7 @@ use headless_chrome::{
         Fetch::{
             events::RequestPausedEvent, FailRequest, FulfillRequest, HeaderEntry
         },
-        Network::ResourceType,
+        Network::ResourceType, types::Event,
     }, self},
     Browser, Element, LaunchOptions, Tab,
 };
@@ -58,7 +58,7 @@ pub struct Scraper {
 /// Just a builder for the Scraper struct. <br>
 /// You can use it to build new Scraper instances.
 /// 
-
+#[derive(Clone)]
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
     pub default_timeout: u64,
@@ -110,6 +110,17 @@ impl ScraperBuilder {
 
         let proxies = self.proxies.clone();
 
+       /*  let sync_event = Arc::new(move |event: &Event| match event {
+            Event::PageLifecycleEvent(lifecycle) => {
+                if lifecycle.params.name == "DOMContentLoaded" {
+                    println!("{}", "loaded");
+                }
+            }
+            _ => {}
+        });
+    
+        tab.add_event_listener(sync_event).unwrap(); */
+
         /* 
         Tab interception is useful to:
             - Enable request-level proxying
@@ -118,6 +129,10 @@ impl ScraperBuilder {
         tab.enable_request_interception(Arc::new(
             move |_: Arc<Transport>, _: SessionId, intercepted: RequestPausedEvent| {
                 // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
+                
+                if intercepted.params.request.url.starts_with("file:///") {
+                    return RequestPausedDecision::Continue(None);
+                }
                 let v = intercepted.params.request.headers.0.unwrap();
 
                 let headersmap = v.as_object().unwrap().clone();
@@ -274,7 +289,7 @@ impl Scraper {
 
         let elements = match query_result {
             Ok(elements) => elements,
-            Err(_) => {println!("Element {} not found", name); vec![]},
+            Err(_) => { vec![]}, // println!("Element {} not found", name);
         };
 
         let dom_els: Vec<DOMElement> = elements.iter().map(|el| self.build_dom_element(el)).collect();
@@ -301,11 +316,17 @@ impl Scraper {
             return self;
         }
 
+        /* self.tab.reload(false, None).unwrap();
+
+        self.tab.wait_until_navigated().unwrap();
+        let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5)).unwrap();
+ */
+
         let query_result = self.tab.wait_for_elements_by_xpath(&target);
 
         let elements = match query_result {
             Ok(elements) => elements,
-            Err(_) => {println!("Element {} not found", name); vec![]},
+            Err(_) => {vec![]}, //println!("Element {} not found", name);
         };
 
         let dom_els: Vec<DOMElement> = elements.iter().map(|el| self.build_dom_element(el)).collect();
@@ -367,9 +388,9 @@ impl Scraper {
         if let Err(_) = self.tab.wait_until_navigated() {
             println!("Page load timeout..");
         }
-
-        let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5));
         
+        let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5));
+
         if r.is_err() {
             println!("Page load timeout..");
         }
@@ -429,14 +450,25 @@ impl Scraper {
     }
 
 
-    pub fn save(&self, targets: &Vec<String>, save_path: &Path ) {
+    pub fn save(&self, targets: &Vec<String>, save_path: &Path, flatten: &bool ) {
 
         let mut els = self.elements.clone();
         els.retain(|k,_| targets.contains(k));
 
-        let s = serde_json::to_string_pretty(&els).unwrap();
+        
+        if *flatten {
 
-        std::fs::write(save_path, s).unwrap();
+            let els = els.iter().map(|(k,v)| v.clone() ).collect::<Vec<Vec<DOMElement>>>();
+            let els = els.into_iter().flatten().collect::<Vec<DOMElement>>();
+            let s = serde_json::to_string_pretty(&els).unwrap();
+
+            std::fs::write(save_path, s).unwrap();
+        } else {
+            let s = serde_json::to_string_pretty(&els).unwrap();
+
+            std::fs::write(save_path, s).unwrap();
+        }
+        
         
     }
 }

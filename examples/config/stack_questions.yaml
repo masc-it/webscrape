@@ -1,0 +1,14 @@
+name: Get recent stack questions
+url: https://stackoverflow.com/questions?tab=newest&page=1&pagesize=50
+targets:
+  element_1: 
+    selector: "//a[contains(@href, '/questions/') and contains(@class, 's-link')]"
+actions:
+  save1:
+    save_path: "./Get recent stack questions/$URL$_stack_questions_els.json"
+    flatten: true
+    targets: 
+      - element_1
+steps:
+  - element_1
+  - save1

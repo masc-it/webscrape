@@ -1,0 +1,12 @@
+name: Simple scraping from file
+url: "file:///D:/Projects/rust/webscrape/examples/files/test1.html"
+targets:
+  element_1: 
+    selector: "//p"
+  element_2: 
+    selector: "//h1"
+actions:
+steps:
+  - element_1
+  - element_2
+  

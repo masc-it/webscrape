@@ -2,10 +2,12 @@
 
 use std::{fmt::Display, collections::HashMap, path::Path};
 
+use rayon::prelude::IntoParallelRefIterator;
 use serde::{Serialize, Deserialize};
 use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
+use rayon::prelude::*;
 
-use crate::scraping::chrome::{Scraper, ScrapingResult, ScreenshotFormat};
+use crate::{scraping::chrome::{Scraper, ScrapingResult, ScreenshotFormat}, ScraperBuilder};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tabled)]
 #[tabled(rename_all = "UPPERCASE")]
@@ -64,7 +66,8 @@ pub struct ActionScreenshot {
 pub struct ActionSave {
 
     pub targets: Vec<String>,
-    pub save_path: String
+    pub save_path: String,
+    pub flatten: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,12 +93,12 @@ pub struct Action {
 
 pub trait PipelineObject {
     
-    fn add(&mut self, scraper: &mut Scraper);
+    fn add(&mut self, scraper: &mut Scraper, name: &String);
 }
 
 impl PipelineObject for Target {
 
-    fn add(&mut self, scraper: &mut Scraper) {
+    fn add(&mut self, scraper: &mut Scraper, name: &String) {
         
         let n = self.name.clone();
         let s = self.selector.clone();
@@ -112,7 +115,7 @@ impl PipelineObject for Target {
 
 impl PipelineObject for Action {
 
-    fn add(&mut self, scraper: &mut Scraper) {
+    fn add(&mut self, scraper: &mut Scraper, name: &String) {
         
         let n = self.name.clone();
         
@@ -129,21 +132,28 @@ impl PipelineObject for Action {
             },
             ActionData::ActionWait(a) => {scraper.sleep(a.duration as u64);},
             ActionData::ActionTypeInto(a) => {scraper.type_into(n, a.target.to_string(), a.text.to_string());}
-            ActionData::ActionSave(a) => {scraper.save(&a.targets, &Path::new(&a.save_path));},
+            ActionData::ActionSave(a) => {
+
+                let save_path = a.save_path.clone();
+                let save_path = save_path.replace("$URL$", name.as_str());
+
+                scraper.save(&a.targets, &Path::new(&save_path), &a.flatten);
+            
+            },
         };
         
     }
 }
 
 #[derive(Serialize, Deserialize)]
-struct Pipeline {
+pub struct Pipeline {
 
     pub name: String,
     pub url: String
 }
 
 #[derive(Serialize, Deserialize)]
-struct PipelineConfig {
+pub struct PipelineConfig {
 
     #[serde(flatten)]
     pub pipeline: Pipeline,
@@ -156,7 +166,7 @@ struct PipelineConfig {
 
 pub struct ScrapingPipeline {
 
-    pipeline_config: PipelineConfig,
+    pub pipeline_config: PipelineConfig,
     scraper: Scraper
 
 }
@@ -184,10 +194,13 @@ impl ScrapingPipeline {
         self.pipeline_config.steps.clone()
     }
 
-    pub fn run(&mut self) -> ScrapingResult {
+    pub fn run(&mut self, url: &String) -> ScrapingResult {
 
-
-        self.scraper.navigate_to(self.pipeline_config.pipeline.url.to_string());
+        if url == "DEFAULT" {
+            self.scraper.navigate_to(self.pipeline_config.pipeline.url.to_string());
+        } else {
+            self.scraper.navigate_to(url);
+        }
 
         let targets = &mut self.pipeline_config.targets;
 
@@ -208,7 +221,7 @@ impl ScrapingPipeline {
 
                     step_name = new_t.name.clone();
                     targets.insert(step_name.clone(), new_t);
-                } else if actions.contains_key(&step_name) {
+                } else if actions.contains_key(from_name) {
                     let mut new_t = actions.get(from_name).unwrap().clone();
                     new_t.name = new_name.to_string();
 
@@ -219,15 +232,15 @@ impl ScrapingPipeline {
                 }
             }
 
-            println!("{}", step_name);
+            //println!("{}", step_name);
 
             if targets.contains_key(&step_name) {
                 let t = &mut (targets.get(&step_name).unwrap().clone());
-                t.add(&mut self.scraper);
+                t.add(&mut self.scraper, &self.pipeline_config.pipeline.name);
             } else if actions.contains_key(&step_name) {
 
                 let a = &mut (actions.get(&step_name).unwrap().clone());
-                a.add(&mut self.scraper)
+                a.add(&mut self.scraper, &self.pipeline_config.pipeline.name)
                 
             } else {
                 println!("{} not implemented.", &step_name);
@@ -238,6 +251,33 @@ impl ScrapingPipeline {
         self.scraper.collect()
     }
 
+}
+
+pub struct PipelineRunner {
+
+}
+
+impl PipelineRunner {
+    pub fn go( pipeline_file: String, scraper_builder: ScraperBuilder, urls: &Vec<String>) -> Vec<ScrapingResult> {
+
+        
+        let mut scraping_results: Vec<ScrapingResult> = vec![];
+
+        urls.par_iter().enumerate().map(move |(i, s)| {
+
+            let scraper = scraper_builder.build();
+            
+            let mut pipeline = ScrapingPipeline::from_file(&pipeline_file.clone(), scraper);
+            std::fs::create_dir(format!("./{}", pipeline.pipeline_config.pipeline.name));
+
+            pipeline.pipeline_config.pipeline.name = format!("{} {}",  pipeline.pipeline_config.pipeline.name, i+1);
+            
+            let res = pipeline.run(&s);
+            res
+    
+        }).collect_into_vec(&mut scraping_results);
+        return scraping_results
+    }
 }
 
 impl Display for ScrapingPipeline {

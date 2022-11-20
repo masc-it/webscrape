@@ -21,6 +21,7 @@ base64 = "0.13.1"
 rand = "0.8.5"
 tabled = "0.10.0"
 pyo3 = { version = "0.17.3", features = ["extension-module"] }
+rayon = "1.5"
 
 [lib]
 name = "webscrape"

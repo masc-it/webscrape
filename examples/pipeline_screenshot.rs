@@ -23,7 +23,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     print!("Run : ");
     let b1 = std::io::stdin().read_line(&mut line).unwrap();
 
-    let res = pipeline.run();
+    let res = pipeline.run(&"DEFAULT".to_string());
 
     println!("num: {}", &res.screenshots.len());
 

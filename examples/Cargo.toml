@@ -28,3 +28,7 @@ path = "pipeline_multithread.rs"
 [[example]]
 name = "pipeline_screenshot"
 path = "pipeline_screenshot.rs"
+
+[[example]]
+name = "pipeline_file"
+path = "pipeline_from_file.rs"
