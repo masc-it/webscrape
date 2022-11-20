@@ -3,9 +3,9 @@
 use std::{fmt::Display, collections::HashMap, path::Path};
 
 use serde::{Serialize, Deserialize};
-use tabled::{Tabled, Panel, Modify, object::{Rows, Column, Row}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
+use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
 
-use crate::scraper::{Scraper, DOMElement, ScrapingResult, ScreenshotFormat};
+use crate::scraping::chrome::{Scraper, ScrapingResult, ScreenshotFormat};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tabled)]
 #[tabled(rename_all = "UPPERCASE")]
