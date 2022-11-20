@@ -22,5 +22,9 @@ name = "pipeline_simple"
 path = "pipeline_simple.rs"
 
 [[example]]
+name = "pipeline_multithread"
+path = "pipeline_multithread.rs"
+
+[[example]]
 name = "pipeline_screenshot"
 path = "pipeline_screenshot.rs"
