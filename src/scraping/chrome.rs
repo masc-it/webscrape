@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, collections::HashMap, path::{Path, PathBuf}};
+use std::{str::FromStr, sync::Arc, collections::HashMap, path::{PathBuf}};
 
 use headless_chrome::{
     browser::{
@@ -9,7 +9,7 @@ use headless_chrome::{
         Fetch::{
             events::RequestPausedEvent, FailRequest, FulfillRequest, HeaderEntry
         },
-        Network::ResourceType, types::Event,
+        Network::ResourceType
     }, self},
     Browser, Element, LaunchOptions, Tab,
 };

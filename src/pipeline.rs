@@ -1,10 +1,10 @@
 #![allow(unused_must_use)]
 
-use std::{fmt::Display, collections::HashMap, path::Path};
+use std::{fmt::Display, collections::HashMap};
 
 use rayon::prelude::IntoParallelRefIterator;
 use serde::{Serialize, Deserialize};
-use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style, TableIteratorExt, Disable, format::Format};
+use tabled::{Tabled, Panel, Modify, object::{Rows}, Alignment, style::HorizontalLine, Style, Disable};
 use rayon::prelude::*;
 
 use crate::{scraping::chrome::{Scraper, ScrapingResult, ScreenshotFormat}, ScraperBuilder};
@@ -187,26 +187,23 @@ impl ScrapingPipeline {
                     println!("Invalid alias: {}", step_name);
                 }
             }
-
-            //println!("{}", step_name);
             
         }
 
         let targets = &self.pipeline_config.targets.clone();
-
         let actions = &self.pipeline_config.actions.clone();
+
         for step in self.get_steps() {
             
             let step_name = step.to_string();
 
             if targets.contains_key(&step_name) {
-                let t = &mut (targets.get(&step_name).unwrap().clone());
+                let t = &(targets.get(&step_name).unwrap().clone());
                 self.register_target(t);
-                //t.add(&mut self.scraper, &self.pipeline_config.pipeline.name);
+
             } else if actions.contains_key(&step_name) {
     
-                let a = &mut (actions.get(&step_name).unwrap().clone());
-                //a.add(&mut self.scraper, &self.pipeline_config.pipeline.name);
+                let a = &(actions.get(&step_name).unwrap().clone());
                 self.register_action(a);
             } else {
                 println!("{} not implemented.", &step_name);
@@ -267,7 +264,7 @@ impl PipelineRunner {
         
         let mut scraping_results: Vec<ScrapingResult> = vec![];
 
-        urls.par_iter().enumerate().map(move |(i, s)| {
+        urls.par_iter().enumerate().map(move |(_i, s)| {
             
             let mut pipeline = ScrapingPipeline::from_file(&pipeline_file.clone());
 
