@@ -23,16 +23,10 @@ fn main() {
         sites.push(format!("https://stackoverflow.com/questions?tab=newest&page={}&pagesize=50", i+1))
     } */
 
-    let mut builder = ScraperBuilder::default();
-    
-    builder
-        .set_headless(true)
-        .set_default_timeout(15);
-
     let t0 = Instant::now();
 
     println!("Running...");
-    let scraping_results = PipelineRunner::go(p1, builder, &sites);
+    let scraping_results = PipelineRunner::go(p1, &sites);
 
     let t1 = t0.elapsed();
 
@@ -42,10 +36,7 @@ fn main() {
     let t0 = Instant::now();
     let s = sites.iter().map(move |s| {
 
-        let mut builder = ScraperBuilder::default();
-        let scraper = builder.set_headless(true).set_default_timeout(5).build();
-        
-        let mut pipeline = ScrapingPipeline::from_file(&pipeline_file.clone(), scraper);
+        let mut pipeline = ScrapingPipeline::from_file(&pipeline_file.clone());
         let res = pipeline.run(&s);
         res
 

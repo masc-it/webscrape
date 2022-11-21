@@ -1,5 +1,8 @@
 name: Scrape confluence
 url: file:///Users/maurosciancalepore/Downloads/text2.html
+out_dir: confluence_scraping
+headless: true
+timeout: 5
 targets:
   paragraphs: 
     selector: "//*[self::p and not(ancestor::li) and not(ancestor::table) or self::ul or self::h2]"
@@ -7,7 +10,6 @@ targets:
     selector: "//ul"
 actions:
   save1:
-    save_path: "./Scrape confluence/$URL$_data.json"
     flatten: false
     targets: 
       - paragraphs
