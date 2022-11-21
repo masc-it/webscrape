@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, collections::HashMap, path::Path};
+use std::{str::FromStr, sync::Arc, collections::HashMap, path::{Path, PathBuf}};
 
 use headless_chrome::{
     browser::{
@@ -98,6 +98,7 @@ impl ScraperBuilder {
     pub fn build(&self) -> Scraper {
        
         let browser = Browser::new(LaunchOptions {
+            path: Some(PathBuf::from_str("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").unwrap()),
             headless: self.headless,
             ..Default::default()
         })
@@ -240,12 +241,13 @@ impl Scraper {
         self.tab.navigate_to(url.as_ref()).unwrap();
 
         if let Err(_) = self.tab.wait_until_navigated() {
-            println!("Page load timeout..");
+            //println!("Page load timeout..");
         }
 
-        self.tab
-            .wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5))
-            .unwrap();
+        if let Err(_) = self.tab
+            .wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5)){
+                println!("Page load timeout..");
+            }
         self.current_url = Some(url.as_ref().to_string());
 
         self
@@ -342,6 +344,7 @@ impl Scraper {
 
         let attrs = el.get_attributes().unwrap().unwrap();
 
+        let tag = el.get_description().unwrap().local_name;
         if attrs.len() > 0 {
 
             for i in (0..attrs.len() - 1).step_by(2) {
@@ -351,6 +354,8 @@ impl Scraper {
                 attrs_map.insert(k, v);
             }
         }
+
+        attrs_map.insert("tag".to_string(), tag);
         
 
         let dom_el = DOMElement {
@@ -455,7 +460,6 @@ impl Scraper {
         let mut els = self.elements.clone();
         els.retain(|k,_| targets.contains(k));
 
-        
         if *flatten {
 
             let els = els.iter().map(|(k,v)| v.clone() ).collect::<Vec<Vec<DOMElement>>>();

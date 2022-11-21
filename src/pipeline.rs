@@ -270,7 +270,9 @@ impl PipelineRunner {
             let mut pipeline = ScrapingPipeline::from_file(&pipeline_file.clone(), scraper);
             std::fs::create_dir(format!("./{}", pipeline.pipeline_config.pipeline.name));
 
-            pipeline.pipeline_config.pipeline.name = format!("{} {}",  pipeline.pipeline_config.pipeline.name, i+1);
+            let parts = s.split("/").collect::<Vec<&str>>();
+            let id = parts.last().unwrap().to_string().replace(".html", "");
+            pipeline.pipeline_config.pipeline.name = format!("{}",  id);
             
             let res = pipeline.run(&s);
             res
