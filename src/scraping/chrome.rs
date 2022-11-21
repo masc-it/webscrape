@@ -53,6 +53,8 @@ pub struct Scraper {
     elements: HashMap<String, Vec<DOMElement>>,
 
     screenshots: HashMap<String, Vec<u8>>,
+
+    save_dir: String
 }
 
 /// Just a builder for the Scraper struct. <br>
@@ -62,12 +64,15 @@ pub struct Scraper {
 pub struct ScraperBuilder {
     pub proxies: Vec<SimpleProxy>,
     pub default_timeout: u64,
-    pub headless: bool
+    pub headless: bool,
+    pub save_dir: String
 }
 
 impl Default for ScraperBuilder {
     fn default() -> Self {
-        Self { proxies: vec![], default_timeout: 5, headless: true }
+
+        let save_dir = ".scraping_results/".to_string();
+        Self { proxies: vec![], default_timeout: 5, headless: true, save_dir: save_dir.clone() }
     }
 }
 
@@ -94,11 +99,24 @@ impl ScraperBuilder {
         self
     }
 
+    pub fn set_save_dir(&mut self, save_dir: String) -> &mut ScraperBuilder {
+        self.save_dir = save_dir;
+        self
+    }
+
     /// It materializes a new Scraper instance with the provided properties.
     pub fn build(&self) -> Scraper {
        
+        std::fs::create_dir(&self.save_dir).unwrap_or(());
+
+        let browser_path = match std::env::consts::OS {
+            "windows" => "%ProgramFiles%/Google/Chrome/Application/chrome.exe",
+            "macos" => "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            _ => ""
+        };
+
         let browser = Browser::new(LaunchOptions {
-            path: Some(PathBuf::from_str("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").unwrap()),
+            path: Some(PathBuf::from_str(browser_path).unwrap()),
             headless: self.headless,
             ..Default::default()
         })
@@ -229,6 +247,7 @@ impl ScraperBuilder {
             current_url: None,
             elements: HashMap::default(),
             screenshots: HashMap::default(),
+            save_dir: self.save_dir.clone()
         }
     }
 }
@@ -455,7 +474,17 @@ impl Scraper {
     }
 
 
-    pub fn save(&self, targets: &Vec<String>, save_path: &Path, flatten: &bool ) {
+    pub fn save(&self, targets: &Vec<String>, flatten: &bool ) {
+
+        let curr_url = self.current_url.as_ref().unwrap();
+        let parts = curr_url.split("/").collect::<Vec<&str>>();
+        let name = parts.last().unwrap().to_string();
+        let name = name.split_once(".").unwrap_or((name.as_str(), ""));
+        let name = name.0.to_string();
+
+        let save_path = &self.save_dir;
+
+        let save_path = format!("{}/{}.json", save_path, name);
 
         let mut els = self.elements.clone();
         els.retain(|k,_| targets.contains(k));
