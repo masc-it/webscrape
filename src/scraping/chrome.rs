@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, collections::HashMap, path::{PathBuf}};
+use std::{str::FromStr, sync::Arc, collections::HashMap, path::{PathBuf}, ffi::OsString};
 
 use headless_chrome::{
     browser::{
@@ -14,6 +14,7 @@ use headless_chrome::{
     Browser, Element, LaunchOptions, Tab,
 };
 
+use log::info;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Serialize;
 
@@ -109,15 +110,12 @@ impl ScraperBuilder {
        
         std::fs::create_dir(&self.save_dir).unwrap_or(());
 
-        let browser_path = match std::env::consts::OS {
-            "windows" => "%ProgramFiles%/Google/Chrome/Application/chrome.exe",
-            "macos" => "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            _ => ""
-        };
+        let no_gpu = "--disable-gpu";
 
+        let no_gpu = OsString::from_str(no_gpu).unwrap();
         let browser = Browser::new(LaunchOptions {
-            path: Some(PathBuf::from_str(browser_path).unwrap()),
             headless: self.headless,
+            args: vec![&no_gpu],
             ..Default::default()
         })
         .unwrap();
@@ -145,100 +143,103 @@ impl ScraperBuilder {
             - Enable request-level proxying
             - Block requests based on mime type  
         */
-        tab.enable_request_interception(Arc::new(
-            move |_: Arc<Transport>, _: SessionId, intercepted: RequestPausedEvent| {
-                // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
-                
-                if intercepted.params.request.url.starts_with("file:///") {
-                    return RequestPausedDecision::Continue(None);
-                }
-                let v = intercepted.params.request.headers.0.unwrap();
 
-                let headersmap = v.as_object().unwrap().clone();
+        if proxies.len() > 0 {
 
-                //println!("{:?}", intercepted.params.resource_Type);
-
-                if intercepted.params.resource_Type == ResourceType::Document {
+            tab.enable_request_interception(Arc::new(
+                move |_: Arc<Transport>, _: SessionId, intercepted: RequestPausedEvent| {
+                    // !intercepted.params.request.url.ends_with(".jpg") && !intercepted.params.request.url.ends_with(".png") && !intercepted.params.request.url.ends_with(".js")
                     
-                    let mut reqwest_proxy: Option<reqwest::Proxy> = None;
-                    if proxies.len() > 0 {
-                        let mut rng: StdRng = SeedableRng::from_entropy();
-                        let rnd_i = rng.gen_range(0..proxies.len());
-                        let proxy = proxies.get(rnd_i).unwrap().to_owned();
-                        //println!("{}", proxy.get_address());
+                    if intercepted.params.request.url.starts_with("file:///") || proxies.len() == 0 {
+                        return RequestPausedDecision::Continue(None);
+                    }
+                    let v = intercepted.params.request.headers.0.unwrap();
 
-                        reqwest_proxy = match proxy.user == "" {
-                            true => Some(reqwest::Proxy::all(proxy.get_address()).unwrap()),
-                            false => Some(
-                                        reqwest::Proxy::all(proxy.get_address())
-                                            .unwrap()
-                                            .basic_auth(&proxy.user, &proxy.password),
-                                    )
+                    let headersmap = v.as_object().unwrap().clone();
+
+                    //println!("{:?}", intercepted.params.resource_Type);
+
+                    if intercepted.params.resource_Type == ResourceType::Document {
+                        
+                        let mut reqwest_proxy: Option<reqwest::Proxy> = None;
+                        if proxies.len() > 0 {
+                            let mut rng: StdRng = SeedableRng::from_entropy();
+                            let rnd_i = rng.gen_range(0..proxies.len());
+                            let proxy = proxies.get(rnd_i).unwrap().to_owned();
+                            //println!("{}", proxy.get_address());
+
+                            reqwest_proxy = match proxy.user == "" {
+                                true => Some(reqwest::Proxy::all(proxy.get_address()).unwrap()),
+                                false => Some(
+                                            reqwest::Proxy::all(proxy.get_address())
+                                                .unwrap()
+                                                .basic_auth(&proxy.user, &proxy.password),
+                                        )
+                            };
+                        }
+
+                        let mut req_headers: Vec<HeaderEntry> = vec![];
+
+                        // Build a header map to simulate a real browser request. 
+                        let mut headers = reqwest::header::HeaderMap::new();
+
+                        for (k, val) in headersmap {
+                            let myk = k.to_owned();
+                            let myv = val.to_owned();
+                            let myv = myv.to_string();
+
+                            let key = reqwest::header::HeaderName::from_str(&myk).unwrap();
+                            let vall = reqwest::header::HeaderValue::from_str(&myv);
+
+                            headers.insert(key, vall.unwrap());
+                        }
+
+                        req_headers.push(HeaderEntry {
+                            name: "Content-Type".to_string(),
+                            value: "text/html; charset=utf-8".to_string(),
+                        });
+
+                        let req_builder = reqwest::blocking::Client::builder();
+
+                        let req_builder = match reqwest_proxy {
+                            Some(p) => req_builder.proxy(p),
+                            None => req_builder,
                         };
+
+                        let client = req_builder
+                            .default_headers(headers.to_owned())
+                            .build()
+                            .unwrap();
+
+                        let res = client
+                            .get(intercepted.params.request.url)
+                            .send()
+                            .unwrap()
+                            .text()
+                            .unwrap();
+
+                        let fulfill_request = FulfillRequest {
+                            request_id: intercepted.params.request_id,
+                            response_code: 200,
+                            response_headers: Some(req_headers),
+                            binary_response_headers: None,
+                            body: Some(base64::encode(res)),
+                            response_phrase: None,
+                        };
+
+                        RequestPausedDecision::Fulfill(fulfill_request)
+                    } else if intercepted.params.resource_Type != ResourceType::Document {
+                        RequestPausedDecision::Continue(None)
+                    } else { // TODO: block some resources
+                        RequestPausedDecision::Fail(FailRequest {
+                            request_id: intercepted.params.request_id,
+                            error_reason:
+                                headless_chrome::protocol::cdp::Network::ErrorReason::BlockedByClient,
+                        })
                     }
-
-                    let mut req_headers: Vec<HeaderEntry> = vec![];
-
-                    // Build a header map to simulate a real browser request. 
-                    let mut headers = reqwest::header::HeaderMap::new();
-
-                    for (k, val) in headersmap {
-                        let myk = k.to_owned();
-                        let myv = val.to_owned();
-                        let myv = myv.to_string();
-
-                        let key = reqwest::header::HeaderName::from_str(&myk).unwrap();
-                        let vall = reqwest::header::HeaderValue::from_str(&myv);
-
-                        headers.insert(key, vall.unwrap());
-                    }
-
-                    req_headers.push(HeaderEntry {
-                        name: "Content-Type".to_string(),
-                        value: "text/html; charset=utf-8".to_string(),
-                    });
-
-                    let req_builder = reqwest::blocking::Client::builder();
-
-                    let req_builder = match reqwest_proxy {
-                        Some(p) => req_builder.proxy(p),
-                        None => req_builder,
-                    };
-
-                    let client = req_builder
-                        .default_headers(headers.to_owned())
-                        .build()
-                        .unwrap();
-
-                    let res = client
-                        .get(intercepted.params.request.url)
-                        .send()
-                        .unwrap()
-                        .text()
-                        .unwrap();
-
-                    let fulfill_request = FulfillRequest {
-                        request_id: intercepted.params.request_id,
-                        response_code: 200,
-                        response_headers: Some(req_headers),
-                        binary_response_headers: None,
-                        body: Some(base64::encode(res)),
-                        response_phrase: None,
-                    };
-
-                    RequestPausedDecision::Fulfill(fulfill_request)
-                } else if intercepted.params.resource_Type != ResourceType::Document {
-                    RequestPausedDecision::Continue(None)
-                } else { // TODO: block some resources
-                    RequestPausedDecision::Fail(FailRequest {
-                        request_id: intercepted.params.request_id,
-                        error_reason:
-                            headless_chrome::protocol::cdp::Network::ErrorReason::BlockedByClient,
-                    })
-                }
-            },
-        )).expect("You should check the validity of your proxies or the URL provided.");
-
+                },
+            )).expect("You should check the validity of your proxies or the URL provided.");
+        }
         Scraper {
             proxy: self.proxies.clone(),
             default_timeout: self.default_timeout,
@@ -257,16 +258,19 @@ impl ScraperBuilder {
 
 impl Scraper {
     pub fn navigate_to<S: AsRef<str> + Clone>(&mut self, url: S) -> &mut Scraper {
+        
+        let t0 = std::time::Instant::now();
+        info!("[NAVIGATE_TO] Start");
         self.tab.navigate_to(url.as_ref()).unwrap();
-
-        if let Err(_) = self.tab.wait_until_navigated() {
+        info!("[NAVIGATE_TO] DONE in {}", t0.elapsed().as_secs());
+        /* if let Err(_) = self.tab.wait_until_navigated() {
             //println!("Page load timeout..");
         }
 
         if let Err(_) = self.tab
             .wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5)){
                 println!("Page load timeout..");
-            }
+            } */
         self.current_url = Some(url.as_ref().to_string());
 
         self
@@ -343,6 +347,8 @@ impl Scraper {
         let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5)).unwrap();
  */
 
+        let t0 = std::time::Instant::now();
+        info!("[XPATH] Start");
         let query_result = self.tab.wait_for_elements_by_xpath(&target);
 
         let elements = match query_result {
@@ -354,29 +360,15 @@ impl Scraper {
 
         self.elements.insert(name.to_string(), dom_els);
         
+        info!("[XPATH] DONE in {}s", t0.elapsed().as_secs());
+
         return self;
     }
 
     fn build_dom_element(&self, el: &Element ) -> DOMElement {
 
-        let mut attrs_map: HashMap<String, String> = HashMap::default();
-
-        let attrs = el.get_attributes().unwrap().unwrap();
-
-        let tag = el.get_description().unwrap().local_name;
-        if attrs.len() > 0 {
-
-            for i in (0..attrs.len() - 1).step_by(2) {
-    
-                let k = attrs[i].to_string();
-                let v = attrs[i+1].to_string();
-                attrs_map.insert(k, v);
-            }
-        }
-
-        attrs_map.insert("tag".to_string(), tag);
+        let attrs_map: HashMap<String, String> = el.attrs.clone();
         
-
         let dom_el = DOMElement {
             text: el.get_inner_text().unwrap(),
             attrs: attrs_map
@@ -483,9 +475,16 @@ impl Scraper {
         let name = name.0.to_string();
 
         let save_path = &self.save_dir;
+        let options = sanitize_filename::Options {
+            truncate: false, // true by default, truncates to 255 bytes
+            windows: false, // default value depends on the OS, removes reserved names like `con` from start of strings on Windows
+            replacement: "_" // str to replace sanitized chars/strings
+        };
 
-        let save_path = format!("{}/{}.json", save_path, name);
-
+        let name = sanitize_filename::sanitize_with_options(name, options);
+        let save_path = format!("./{}/{}.json", save_path, name);
+        
+        println!("{}", &save_path);
         let mut els = self.elements.clone();
         els.retain(|k,_| targets.contains(k));
 

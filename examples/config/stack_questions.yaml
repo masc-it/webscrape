@@ -1,8 +1,8 @@
 name: Get recent stack questions
 url: https://stackoverflow.com/questions?tab=newest&page=1&pagesize=50
 out_dir: so_scraping
-headless: true
-timeout: 5
+headless: false
+timeout: 10
 targets:
   element_1: 
     selector: "//a[contains(@href, '/questions/') and contains(@class, 's-link')]"

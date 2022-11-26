@@ -3,6 +3,7 @@ use webscrape::{ScraperBuilder, ScrapingPipeline};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     
+    env_logger::init();
     let pipeline_file = std::env::args().nth(1).expect("no pipeline source given");
 
     println!("--------------------");
@@ -22,7 +23,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("num: {}", &res.elements.len());
 
-    for (name, els) in res.elements {
+    /* for (name, els) in res.elements {
 
         println!("TARGET: {}", name);
         for el in &els {
@@ -33,6 +34,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("--------------------");
         }
-    }
+    } */
     Ok(())
 }
