@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, collections::HashMap, path::{PathBuf}, ffi::OsString};
+use std::{str::FromStr, sync::Arc, collections::HashMap};
 
 use headless_chrome::{
     browser::{
@@ -110,12 +110,8 @@ impl ScraperBuilder {
        
         std::fs::create_dir(&self.save_dir).unwrap_or(());
 
-        let no_gpu = "--disable-gpu";
-
-        let no_gpu = OsString::from_str(no_gpu).unwrap();
         let browser = Browser::new(LaunchOptions {
             headless: self.headless,
-            args: vec![&no_gpu],
             ..Default::default()
         })
         .unwrap();
@@ -394,22 +390,32 @@ impl Scraper {
 
         let res = match selector_type {
             Selector::CSS => self.tab.wait_for_element(&target).and_then(|el| {el.click().and_then(|_r| Ok(true))}),
-            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().click().and_then(|_r| Ok(true))}),
+            Selector::XPath => self.tab.wait_for_elements_by_xpath(&target).and_then(|el| {el.get(0).unwrap().click().and_then(|_r| Ok(true))})
         };
 
         if res.is_err() {
             println!("Couldn't find element: {}", name.as_ref());
         }
 
-        if let Err(_) = self.tab.wait_until_navigated() {
-            println!("Page load timeout..");
+        // TODO fix headless click and navigation
+        // 
+
+        /* let els = self.tab.wait_for_elements_by_xpath(&target).unwrap_or(vec![]);
+
+        if els.len() == 0 {
+            println!("click target not found");
+            return self;
         }
-        
-        let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(5));
+
+        let el = els.get(0).unwrap();
+
+        el.click().unwrap(); */
+
+        /* let r = self.tab.wait_for_xpath_with_custom_timeout("//body", std::time::Duration::from_secs(10));
 
         if r.is_err() {
-            println!("Page load timeout..");
-        }
+            println!("Page load timeout 2..");
+        } */
 
 
         self
@@ -484,7 +490,7 @@ impl Scraper {
         let name = sanitize_filename::sanitize_with_options(name, options);
         let save_path = format!("./{}/{}.json", save_path, name);
         
-        println!("{}", &save_path);
+        //println!("{}", &save_path);
         let mut els = self.elements.clone();
         els.retain(|k,_| targets.contains(k));
 

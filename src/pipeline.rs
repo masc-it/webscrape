@@ -162,7 +162,7 @@ impl ScrapingPipeline {
 
         let actions = &mut self.pipeline_config.actions;
 
-        for step in &self.pipeline_config.steps {
+        for step in &mut self.pipeline_config.steps {
             
             let mut step_name = step.to_string();
 
@@ -185,7 +185,10 @@ impl ScrapingPipeline {
                     actions.insert(step_name.clone(), new_t);
                 } else {
                     println!("Invalid alias: {}", step_name);
+                    continue;
                 }
+
+                *step = new_name.to_string();
             }
             
         }

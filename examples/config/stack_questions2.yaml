@@ -1,0 +1,22 @@
+name: Get recent stack questions
+url: https://stackoverflow.com/questions?tab=newest&page=1&pagesize=50
+out_dir: so_scraping2
+headless: false
+timeout: 15
+targets:
+  element_1: 
+    selector: "//a[contains(@href, '/questions/') and contains(@class, 's-link')]"
+actions:
+  click1:
+    type: CLICK
+    selector: "//a[contains(@title, 'Go to page 2')]"
+  save1:
+    flatten: false
+    targets: 
+      - element_1
+      - element_2
+steps:
+  - element_1
+  - click1
+  - element_2 from element_1
+  - save1
