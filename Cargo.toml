@@ -1,6 +1,6 @@
 [package]
 name = "webscrape"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["Mauro Sciancalepore <maurosciancalepore98@gmail.com>"]
 description = "Web Scraping made easy."
@@ -11,9 +11,8 @@ license = "MIT"
 [dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 tokio = { version = "1", features = ["full"] }
-#headless_chrome = { git = "https://github.com/atroche/rust-headless-chrome", tag = "v1.0.0", features = ["fetch"] }
-#headless_chrome_fork = { version = "1", features = ["fetch"] }
-headless_chrome_fork = { path = "D:/Projects/git_forks/rust-headless-chrome", version = "*", features = ["fetch"] }
+headless_chrome_fork = { version = "1", features = ["fetch"] }
+#headless_chrome_fork = { path = "D:/Projects/git_forks/rust-headless-chrome", version = "*", features = ["fetch"] }
 
 #scraper = "0.13.0"
 serde = "1.0"
